@@ -1,0 +1,129 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function hasUserProfile() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return hasUserProfile() ? currentUserDoc().data.role : null;
+    }
+
+    function isAdmin() {
+      return userRole() == "admin";
+    }
+
+    function isCoach() {
+      return userRole() == "coach";
+    }
+
+    function isStaff() {
+      return isAdmin() || isCoach();
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isAdmin()
+        || (
+          isOwner(userId)
+          && request.resource.data.id == userId
+          && request.resource.data.authUid == userId
+          && request.resource.data.role in ["parent", "player"]
+        );
+      allow update: if isAdmin()
+        || (
+          isOwner(userId)
+          && resource.data.role in ["parent", "player"]
+          && request.resource.data.id == resource.data.id
+          && request.resource.data.authUid == resource.data.authUid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.playerIds == resource.data.playerIds
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /teams/{teamId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /coaches/{coachId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /gymSpaces/{gymSpaceId} {
+      allow read: if isStaff();
+      allow write: if isStaff();
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /schedules/{scheduleId} {
+      allow read: if isSignedIn();
+      allow write: if isStaff();
+    }
+
+    match /programs/{programId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /pages/{pageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /alumni/{alumniId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /registrations/{registrationId} {
+      allow create: if true;
+      allow read: if isStaff()
+        || (
+          isSignedIn()
+          && resource.data.playerId in currentUserDoc().data.playerIds
+        );
+      allow update, delete: if isAdmin();
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+  }
+}
