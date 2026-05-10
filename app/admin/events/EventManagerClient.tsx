@@ -5,15 +5,20 @@ import Link from "next/link";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
-import type { EventDocument } from "@/lib/firebase/schema";
+import { formatEventStatus, getEventStatus } from "@/lib/event-status";
+import { getEventTeamLabel, getEventTeamSchedules } from "@/lib/event-teams";
+import { compareAthletesByName } from "@/lib/player-name";
+import type { EventDocument, EventTeamSchedule } from "@/lib/firebase/schema";
 
 type EventDraft = {
   type: EventDocument["type"];
   title: string;
-  teamId: string;
+  status: EventDocument["status"];
+  teamSchedules: EventTeamSchedule[];
   ageGroup: string;
   price: string;
   paymentUrl: string;
+  externalUrl: string;
   startDate: string;
   endDate: string;
   startHour: string;
@@ -27,10 +32,12 @@ type EventDraft = {
 const emptyDraft: EventDraft = {
   type: "tournament",
   title: "",
-  teamId: "",
+  status: "none",
+  teamSchedules: [],
   ageGroup: "",
   price: "0",
   paymentUrl: "",
+  externalUrl: "",
   startDate: "",
   endDate: "",
   startHour: "6",
@@ -67,7 +74,7 @@ function parseStoredTime(value: string) {
   return {
     startHour: String(normalizedHour),
     startMinute: rawMinute,
-    startMeridiem: meridiem,
+    startMeridiem: meridiem as "AM" | "PM",
   };
 }
 
@@ -97,10 +104,12 @@ function mapEventToDraft(event: EventDocument): EventDraft {
   return {
     type: event.type,
     title: event.title,
-    teamId: event.teamId,
+    status: getEventStatus(event),
+    teamSchedules: getEventTeamSchedules(event),
     ageGroup: event.ageGroup || legacyAgeGroups?.[0] || "",
     price: String(event.price ?? 0),
     paymentUrl: event.paymentUrl ?? "",
+    externalUrl: event.externalUrl ?? "",
     startDate: event.startDate,
     endDate: event.endDate,
     startHour: parsedTime.startHour,
@@ -137,6 +146,18 @@ function formatDateRange(startDate: string, endDate: string) {
   return `${start.toLocaleDateString(undefined, formatter)} to ${end.toLocaleDateString(undefined, formatter)}`;
 }
 
+function formatEventTypeLabel(type: EventDocument["type"]) {
+  if (type === "areaCamp") {
+    return "Area Camp";
+  }
+
+  if (type === "refScoringClinic") {
+    return "Ref And Scoring Clinic";
+  }
+
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 export default function EventManagerClient() {
   const events = useFirestoreCollection("events");
   const teams = useFirestoreCollection("teams");
@@ -159,11 +180,12 @@ export default function EventManagerClient() {
     }
 
     return sorted.filter((event) => {
-      const teamName = teams.data.find((team) => team.id === event.teamId)?.name ?? "";
+      const teamName = getEventTeamLabel(event, teams.data);
 
       return [
         event.title,
         event.type,
+        formatEventStatus(getEventStatus(event)),
         event.startDate,
         event.endDate,
         event.startTime,
@@ -200,10 +222,17 @@ export default function EventManagerClient() {
       const payload = {
         type: draft.type,
         title: draft.title.trim(),
-        teamId: draft.teamId.trim(),
+        status: draft.status,
+        teamSchedules: draft.teamSchedules
+          .map((entry) => ({
+            teamId: entry.teamId.trim(),
+            scheduleUrl: entry.scheduleUrl.trim(),
+          }))
+          .filter((entry) => entry.teamId),
         ageGroup: draft.ageGroup,
         price: draft.price.trim() ? Number(draft.price) : 0,
         paymentUrl: draft.paymentUrl.trim(),
+        externalUrl: draft.externalUrl.trim(),
         startDate: draft.startDate,
         endDate: normalizedEndDate,
         startTime,
@@ -257,6 +286,26 @@ export default function EventManagerClient() {
     }
   }
 
+  function toggleTeamSchedule(teamId: string, checked: boolean) {
+    setDraft((current) => ({
+      ...current,
+      teamSchedules: checked
+        ? current.teamSchedules.some((entry) => entry.teamId === teamId)
+          ? current.teamSchedules
+          : [...current.teamSchedules, { teamId, scheduleUrl: "" }]
+        : current.teamSchedules.filter((entry) => entry.teamId !== teamId),
+    }));
+  }
+
+  function updateTeamScheduleUrl(teamId: string, scheduleUrl: string) {
+    setDraft((current) => ({
+      ...current,
+      teamSchedules: current.teamSchedules.map((entry) =>
+        entry.teamId === teamId ? { ...entry, scheduleUrl } : entry,
+      ),
+    }));
+  }
+
   return (
     <>
       <PageHero
@@ -282,23 +331,58 @@ export default function EventManagerClient() {
                 <option value="practice">Practice</option>
                 <option value="camp">Camp</option>
                 <option value="tryout">Tryout</option>
+                <option value="areaCamp">Area Camp</option>
+                <option value="refScoringClinic">Ref And Scoring Clinic</option>
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Team (optional)
+              Status
               <select
-                value={draft.teamId}
-                onChange={(event) => setDraft((current) => ({ ...current, teamId: event.target.value }))}
+                value={draft.status}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, status: event.target.value as EventDocument["status"] }))
+                }
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               >
-                <option value="">All players</option>
-                {teams.data.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
+                <option value="none">None</option>
+                <option value="accepted">Accepted</option>
+                <option value="pending">Pending</option>
+                <option value="waitlisted">Waitlisted</option>
               </select>
             </label>
+            <div className="md:col-span-2 flex flex-col gap-3 text-sm font-semibold text-[color:var(--ink)]">
+              Team schedules (optional)
+              <div className="space-y-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
+                {teams.data.length === 0 ? (
+                  <p className="text-sm font-normal text-[color:var(--muted)]">No teams have been added yet.</p>
+                ) : (
+                  teams.data.map((team) => {
+                    const teamSchedule = draft.teamSchedules.find((entry) => entry.teamId === team.id);
+                    const isSelected = Boolean(teamSchedule);
+
+                    return (
+                      <div key={team.id} className="grid gap-3 md:grid-cols-[minmax(0,14rem)_1fr] md:items-center">
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(event) => toggleTeamSchedule(team.id, event.target.checked)}
+                          />
+                          <span>{team.name}</span>
+                        </label>
+                        <input
+                          value={teamSchedule?.scheduleUrl ?? ""}
+                          onChange={(event) => updateTeamScheduleUrl(team.id, event.target.value)}
+                          className="rounded-2xl border border-[color:var(--line)] px-4 py-3 disabled:bg-[color:var(--paper)]"
+                          disabled={!isSelected}
+                          placeholder="Team schedule link"
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Event title
               <input
@@ -325,6 +409,15 @@ export default function EventManagerClient() {
                 onChange={(event) => setDraft((current) => ({ ...current, paymentUrl: event.target.value }))}
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                 placeholder="Paste a hosted payment link"
+              />
+            </label>
+            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              External link (optional)
+              <input
+                value={draft.externalUrl}
+                onChange={(event) => setDraft((current) => ({ ...current, externalUrl: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                placeholder="Paste the outside registration or event page link"
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
@@ -477,14 +570,10 @@ export default function EventManagerClient() {
               </div>
             )}
             {filteredEvents.map((event) => {
-              const teamName = teams.data.find((team) => team.id === event.teamId)?.name ?? "All players";
+              const teamName = getEventTeamLabel(event, teams.data);
               const eventRegistrations = registrations.data
                 .filter((registration) => registration.eventId === event.id)
-                .sort((left, right) =>
-                  `${left.athleteLastName} ${left.athleteFirstName}`.localeCompare(
-                    `${right.athleteLastName} ${right.athleteFirstName}`,
-                  ),
-                );
+                .sort(compareAthletesByName);
               const shouldShowRegistrations = event.type === "camp" || event.type === "tryout";
 
               return (
@@ -492,7 +581,12 @@ export default function EventManagerClient() {
                   <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="space-y-1">
                       <p className="text-lg font-bold text-[color:var(--ink)]">{event.title}</p>
-                      <p className="text-sm capitalize text-[color:var(--muted)]">{event.type}</p>
+                      <p className="text-sm capitalize text-[color:var(--muted)]">
+                        {formatEventTypeLabel(event.type)}
+                      </p>
+                      <p className="text-sm text-[color:var(--muted)]">
+                        Status: {formatEventStatus(getEventStatus(event))}
+                      </p>
                       <p className="text-sm text-[color:var(--muted)]">
                         Team: {teamName}
                       </p>
@@ -513,6 +607,9 @@ export default function EventManagerClient() {
                       </p>
                       <p className="text-sm text-[color:var(--muted)]">
                         Payment: {event.paymentUrl ? "Ready" : event.price > 0 ? "Link needed" : "No payment needed"}
+                      </p>
+                      <p className="text-sm text-[color:var(--muted)]">
+                        External link: {event.externalUrl ? "Ready" : "Not set"}
                       </p>
                       {shouldShowRegistrations && (
                         <div className="pt-2">

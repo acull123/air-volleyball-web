@@ -146,8 +146,10 @@ export const firestoreApi = {
     listActive: () => listDocuments("events", [where("active", "==", true), orderBy("startDate")]),
     listByType: (type: FirestoreCollections["events"]["type"]) =>
       listDocuments("events", [where("type", "==", type), orderBy("startDate")]),
-    listByTeam: (teamId: string) =>
-      listDocuments("events", [where("teamId", "==", teamId), orderBy("startDate")]),
+    listByTeam: async (teamId: string) =>
+      (await listDocuments("events", [orderBy("startDate")])).filter((event) =>
+        event.teamSchedules.some((entry) => entry.teamId === teamId),
+      ),
   },
   schedules: {
     ...buildCollectionStore("schedules"),
@@ -178,6 +180,20 @@ export const firestoreApi = {
       listDocuments("invoices", [where("userId", "==", userId), orderBy("dueDate")]),
     listByPlayer: (playerId: string) =>
       listDocuments("invoices", [where("playerId", "==", playerId), orderBy("dueDate")]),
+  },
+  expenseReports: {
+    ...buildCollectionStore("expenseReports"),
+    listByCoach: (coachUserId: string) =>
+      listDocuments("expenseReports", [where("coachUserId", "==", coachUserId), orderBy("createdAt", "desc")]),
+    listByStatus: (status: FirestoreCollections["expenseReports"]["status"]) =>
+      listDocuments("expenseReports", [where("status", "==", status), orderBy("createdAt", "desc")]),
+  },
+  conflicts: {
+    ...buildCollectionStore("conflicts"),
+    listByUser: (userId: string) =>
+      listDocuments("conflicts", [where("userId", "==", userId), orderBy("startAt")]),
+    listByPlayer: (playerId: string) =>
+      listDocuments("conflicts", [where("playerId", "==", playerId), orderBy("startAt")]),
   },
   payments: {
     ...buildCollectionStore("payments"),

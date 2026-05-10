@@ -1,4 +1,5 @@
 import type { Event } from "../types/models";
+import { toExternalHref } from "@/lib/url";
 
 export default function ScheduleTable({
   events,
@@ -24,7 +25,10 @@ export default function ScheduleTable({
             <th className="px-4 py-3 font-semibold">Type</th>
             <th className="px-4 py-3 font-semibold">Date</th>
             <th className="px-4 py-3 font-semibold">Time</th>
+            <th className="px-4 py-3 font-semibold">Team</th>
             <th className="px-4 py-3 font-semibold">Location</th>
+            <th className="px-4 py-3 font-semibold">Status</th>
+            <th className="px-4 py-3 font-semibold">Schedule</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-[color:var(--line)] bg-white">
@@ -52,7 +56,27 @@ export default function ScheduleTable({
                   {end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 </td>
                 <td className="px-4 py-4 align-top text-[color:var(--muted)]">
+                  {event.teamName || "All teams"}
+                </td>
+                <td className="px-4 py-4 align-top text-[color:var(--muted)]">
                   {event.location ?? "TBD"}
+                </td>
+                <td className="px-4 py-4 align-top capitalize text-[color:var(--muted)]">
+                  {event.status && event.status !== "none" ? event.status : "None"}
+                </td>
+                <td className="px-4 py-4 align-top text-[color:var(--muted)]">
+                  {event.scheduleUrl ? (
+                    <a
+                      href={toExternalHref(event.scheduleUrl)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-semibold text-[color:var(--ink)] underline decoration-[color:var(--line)] underline-offset-4"
+                    >
+                      Open
+                    </a>
+                  ) : (
+                    "TBD"
+                  )}
                 </td>
               </tr>
             );

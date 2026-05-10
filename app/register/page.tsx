@@ -2,10 +2,15 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import PageHero from "../components/PageHero";
 import SectionCard from "../components/SectionCard";
 import PayPalCheckout from "./PayPalCheckout";
+import { formatEventStatus, getEventStatus, shouldShowEventStatus } from "@/lib/event-status";
+import { getEventTeamLabel } from "@/lib/event-teams";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { comparePlayersByName } from "@/lib/player-name";
+import { isCurrentPlayer } from "@/lib/player-status";
 import type { EventDocument } from "@/lib/firebase/schema";
 
 type RegistrationMode = "existing" | "new";
@@ -29,6 +34,12 @@ const nextSteps = [
   "Select a current player or add a new athlete profile for this registration.",
   "Complete payment right away when a payment link is ready for that event.",
 ];
+
+const registerInteractiveCardClass =
+  "group w-full cursor-pointer rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-5 text-left transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]";
+
+const registerSelectedCardClass =
+  "group w-full cursor-pointer rounded-[1.5rem] border border-transparent bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] px-5 py-5 text-left shadow-[0_12px_30px_rgba(17,58,98,0.12)] transition";
 
 function isRegisterableEvent(
   event: EventDocument,
@@ -109,11 +120,13 @@ function normalizeValue(value: string) {
 }
 
 export default function RegisterPage() {
+  const searchParams = useSearchParams();
+  const initialEventId = searchParams.get("event") ?? "";
   const payPalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
   const events = useFirestoreCollection("events");
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
-  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState(initialEventId);
   const [registrationMode, setRegistrationMode] = useState<RegistrationMode>("existing");
   const [existingPlayerId, setExistingPlayerId] = useState("");
   const [playerSearchTerm, setPlayerSearchTerm] = useState("");
@@ -138,6 +151,8 @@ export default function RegisterPage() {
   const effectiveSelectedEventId =
     selectedEventId && registerableEvents.some((event) => event.id === selectedEventId)
       ? selectedEventId
+      : registerableEvents.some((event) => event.id === initialEventId)
+        ? initialEventId
       : registerableEvents[0]?.id ?? "";
 
   const selectedEvent =
@@ -145,11 +160,7 @@ export default function RegisterPage() {
 
   const visiblePlayers = useMemo(() => {
     const normalizedSearch = playerSearchTerm.trim().toLowerCase();
-    const sorted = [...players.data]
-      .filter((player) => player.active !== false)
-      .sort((left, right) =>
-        `${left.lastName} ${left.firstName}`.localeCompare(`${right.lastName} ${right.firstName}`),
-      );
+    const sorted = [...players.data].filter(isCurrentPlayer).sort(comparePlayersByName);
 
     if (!normalizedSearch) {
       return sorted;
@@ -165,7 +176,7 @@ export default function RegisterPage() {
   }, [playerSearchTerm, players.data, teams.data]);
 
   const selectedExistingPlayer =
-    players.data.find((player) => player.id === existingPlayerId) ?? null;
+    players.data.find((player) => isCurrentPlayer(player) && player.id === existingPlayerId) ?? null;
 
   const matchedExistingPlayerForNewRegistration = useMemo(() => {
     if (registrationMode !== "new") {
@@ -183,7 +194,7 @@ export default function RegisterPage() {
     return (
       players.data.find(
         (player) =>
-          player.active !== false &&
+          isCurrentPlayer(player) &&
           normalizeValue(player.firstName) === firstName &&
           normalizeValue(player.lastName) === lastName &&
           player.birthDate === birthDate,
@@ -353,8 +364,8 @@ export default function RegisterPage() {
           ) : (
             <div className="space-y-4">
               {registerableEvents.map((event) => {
-                const teamName =
-                  teams.data.find((team) => team.id === event.teamId)?.name ?? "All players";
+                const teamName = getEventTeamLabel(event, teams.data);
+                const eventStatus = getEventStatus(event);
                 const isSelected = event.id === effectiveSelectedEventId;
 
                 return (
@@ -366,31 +377,28 @@ export default function RegisterPage() {
                       setShowPaymentStep(false);
                       setError(null);
                     }}
-                    className={`w-full rounded-[1.5rem] border px-5 py-5 text-left transition ${
-                      isSelected
-                        ? "border-[color:var(--ink)] bg-[color:var(--paper)]"
-                        : "border-[color:var(--line)] bg-white hover:bg-[color:var(--paper)]"
-                    }`}
+                    className={isSelected ? registerSelectedCardClass : registerInteractiveCardClass}
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                        <p className={`text-sm font-bold uppercase tracking-[0.18em] ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                           {event.type === "camp" ? "Camp" : "Tryout"}
                         </p>
-                        <h3 className="mt-2 text-2xl font-bold text-[color:var(--ink)]">
+                        <h3 className={`mt-2 text-2xl font-bold ${isSelected ? "text-white" : "text-[color:var(--ink)] group-hover:text-white"}`}>
                           {event.title}
                         </h3>
                       </div>
-                      <span className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)]">
+                      <span className={`rounded-full border px-4 py-2 text-sm font-semibold ${isSelected ? "border-white/30 text-white" : "border-[color:var(--line)] text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white"}`}>
                         {formatMoney(event.price ?? 0)}
                       </span>
                     </div>
-                    <div className="mt-4 space-y-2 text-sm text-[color:var(--muted)]">
+                    <div className={`mt-4 space-y-2 text-sm ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                       <p>{formatEventDateRange(event.startDate, event.endDate)}</p>
                       <p>{formatEventTime(event.startTime)}</p>
                       <p>{event.location}</p>
                       <p>Audience: {teamName}</p>
                       <p>Age group: {event.ageGroup || "All ages"}</p>
+                      {shouldShowEventStatus(eventStatus) && <p>Status: {formatEventStatus(eventStatus)}</p>}
                     </div>
                   </button>
                 );
@@ -440,16 +448,12 @@ export default function RegisterPage() {
                     setShowPaymentStep(false);
                     setError(null);
                   }}
-                  className={`rounded-2xl border px-4 py-4 text-left transition ${
-                    registrationMode === "existing"
-                      ? "border-[color:var(--ink)] bg-[color:var(--paper)]"
-                      : "border-[color:var(--line)] bg-white hover:bg-[color:var(--paper)]"
-                  }`}
+                  className={registrationMode === "existing" ? registerSelectedCardClass : registerInteractiveCardClass}
                 >
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                  <p className={`text-sm font-bold uppercase tracking-[0.18em] ${registrationMode === "existing" ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                     Existing Player
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-[color:var(--muted)]">
+                  <p className={`mt-2 text-sm leading-7 ${registrationMode === "existing" ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                     Choose a player already in the club records.
                   </p>
                 </button>
@@ -460,16 +464,12 @@ export default function RegisterPage() {
                     setShowPaymentStep(false);
                     setError(null);
                   }}
-                  className={`rounded-2xl border px-4 py-4 text-left transition ${
-                    registrationMode === "new"
-                      ? "border-[color:var(--ink)] bg-[color:var(--paper)]"
-                      : "border-[color:var(--line)] bg-white hover:bg-[color:var(--paper)]"
-                  }`}
+                  className={registrationMode === "new" ? registerSelectedCardClass : registerInteractiveCardClass}
                 >
-                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                  <p className={`text-sm font-bold uppercase tracking-[0.18em] ${registrationMode === "new" ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                     New Player
                   </p>
-                  <p className="mt-2 text-sm leading-7 text-[color:var(--muted)]">
+                  <p className={`mt-2 text-sm leading-7 ${registrationMode === "new" ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                     Add a player who is not in the roster yet.
                   </p>
                 </button>
@@ -510,16 +510,12 @@ export default function RegisterPage() {
                             key={player.id}
                             type="button"
                             onClick={() => setExistingPlayerId(player.id)}
-                            className={`w-full rounded-[1.5rem] border px-5 py-4 text-left transition ${
-                              isSelected
-                                ? "border-[color:var(--ink)] bg-[color:var(--paper)]"
-                                : "border-[color:var(--line)] bg-white hover:bg-[color:var(--paper)]"
-                            }`}
+                            className={isSelected ? registerSelectedCardClass : registerInteractiveCardClass}
                           >
-                            <p className="text-lg font-bold text-[color:var(--ink)]">
+                            <p className={`text-lg font-bold ${isSelected ? "text-white" : "text-[color:var(--ink)] group-hover:text-white"}`}>
                               {player.firstName} {player.lastName}
                             </p>
-                            <div className="mt-2 space-y-1 text-sm text-[color:var(--muted)]">
+                            <div className={`mt-2 space-y-1 text-sm ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                               <p>Team: {teamName}</p>
                               <p>Position: {player.position || "Position coming soon"}</p>
                               <p>Birthdate: {formatBirthDate(player.birthDate)}</p>

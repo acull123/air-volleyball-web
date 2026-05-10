@@ -19,7 +19,7 @@ export default function AdminGate() {
       router.replace("/admin/dashboard");
     }
     if (access.authUser && isRole(access.authUser.profile, "coach")) {
-      router.replace("/admin/players");
+      router.replace("/admin/dashboard");
     }
   }, [access.authUser, router]);
 

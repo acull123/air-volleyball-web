@@ -43,6 +43,7 @@ Use `PAYPAL_ENV=live` when you are ready to switch out of sandbox.
 The Firestore data layer lives in `lib/firebase/`:
 
 - `client.ts`: Firebase app, auth, analytics, and Firestore initialization.
+- `storage.ts`: player photo upload helper for Cloud Storage.
 - `schema.ts`: TypeScript schema matching the Air collections.
 - `collections.ts`: typed collection and document refs.
 - `live.ts`: generic `onSnapshot` listeners for real-time subscriptions.
@@ -92,6 +93,8 @@ Current access model:
 - admin-only write: `users`, `programs`, `pages`, `alumni`, `announcements`, `invoices`, `payments`
 
 To use it, paste the contents of `firestore.rules` into the Firestore Rules editor in the console and publish it.
+
+Player photo uploads also require Cloud Storage rules that let staff write player images. The repo now includes `storage.rules` for that. Paste it into the Storage Rules editor in the console and publish it if uploads fail with a permission error.
 
 ## Migration note
 

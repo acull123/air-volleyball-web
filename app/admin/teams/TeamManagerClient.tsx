@@ -4,6 +4,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { comparePlayersByName } from "@/lib/player-name";
+import { isCurrentPlayer } from "@/lib/player-status";
 import type { CoachDocument, TeamDocument } from "@/lib/firebase/schema";
 
 type TeamDraft = {
@@ -103,7 +105,9 @@ export default function TeamManagerClient() {
 
     return sorted.filter((team) => {
       const playerNames = players.data
+        .filter(isCurrentPlayer)
         .filter((player) => team.playerIds.includes(player.id))
+        .sort(comparePlayersByName)
         .map((player) => `${player.firstName} ${player.lastName}`)
         .join(" ");
       const coachNames = coaches.data
@@ -119,10 +123,7 @@ export default function TeamManagerClient() {
   }, [coaches.data, players.data, searchTerm, teams.data]);
 
   const sortedPlayers = useMemo(
-    () =>
-      [...players.data].sort((a, b) =>
-        `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`),
-      ),
+    () => [...players.data].filter(isCurrentPlayer).sort(comparePlayersByName),
     [players.data],
   );
 
@@ -617,7 +618,10 @@ export default function TeamManagerClient() {
               </div>
             )}
             {filteredTeams.map((team) => {
-              const teamPlayers = players.data.filter((player) => player.teamId === team.id);
+              const teamPlayers = players.data
+                .filter(isCurrentPlayer)
+                .filter((player) => player.teamId === team.id)
+                .sort(comparePlayersByName);
               const teamCoaches = coaches.data.filter((coach) => getCoachTeamIds(coach).includes(team.id));
 
               return (

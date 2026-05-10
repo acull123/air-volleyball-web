@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { compareAthletesByName, comparePlayersByName } from "@/lib/player-name";
+import { isCurrentPlayer } from "@/lib/player-status";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("en-US", {
@@ -78,11 +80,7 @@ export default function RegistrationManagerClient() {
     () =>
       registrations.data
         .filter((registration) => registration.eventId === selectedEvent?.id)
-        .sort((left, right) =>
-          `${left.athleteLastName} ${left.athleteFirstName}`.localeCompare(
-            `${right.athleteLastName} ${right.athleteFirstName}`,
-          ),
-        ),
+        .sort(compareAthletesByName),
     [registrations.data, selectedEvent?.id],
   );
 
@@ -93,11 +91,9 @@ export default function RegistrationManagerClient() {
     );
 
     return [...players.data]
-      .filter((player) => player.active !== false)
+      .filter(isCurrentPlayer)
       .filter((player) => !registeredPlayerIds.has(player.id))
-      .sort((left, right) =>
-        `${left.lastName} ${left.firstName}`.localeCompare(`${right.lastName} ${right.firstName}`),
-      )
+      .sort(comparePlayersByName)
       .filter((player) => {
         if (!normalizedSearch) {
           return true;
@@ -113,7 +109,7 @@ export default function RegistrationManagerClient() {
   }, [eventRegistrations, playerSearchTerm, players.data, teams.data]);
 
   const selectedPlayer =
-    players.data.find((player) => player.id === selectedPlayerId) ?? null;
+    players.data.find((player) => isCurrentPlayer(player) && player.id === selectedPlayerId) ?? null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

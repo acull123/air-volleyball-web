@@ -1,0 +1,56 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function hasUserProfile() {
+      return isSignedIn()
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return hasUserProfile()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isCoach() {
+      return hasUserProfile()
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == "coach";
+    }
+
+    function isStaff() {
+      return isAdmin() || isCoach();
+    }
+
+    match /players/{playerId}/{fileName} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /players/unassigned/{fileName} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /coaches/{coachId}/{fileName} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /coaches/unassigned/{fileName} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /expense-receipts/{userId}/{reportId}/{fileName} {
+      allow read: if isAdmin()
+        || (isCoach() && request.auth.uid == userId)
+        || (isSignedIn() && request.auth.uid == userId);
+      allow write: if isAdmin()
+        || (isCoach() && request.auth.uid == userId);
+    }
+  }
+}

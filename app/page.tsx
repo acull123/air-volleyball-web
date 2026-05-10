@@ -6,9 +6,12 @@ import FavoritePreferenceDialog from "./components/FavoritePreferenceDialog";
 import EventCard from "./components/EventCard";
 import PageHero from "./components/PageHero";
 import SectionCard from "./components/SectionCard";
+import { getEventStatus } from "@/lib/event-status";
+import { getEventTeamIds } from "@/lib/event-teams";
 import { useFirestoreCollection } from "@/lib/firebase";
 import type { Event } from "./types/models";
 import type { EventDocument, PlayerDocument, TeamDocument } from "@/lib/firebase/schema";
+import { isCurrentPlayer } from "@/lib/player-status";
 
 const favoritePreferenceCookieName = "air-favorite-preference";
 const favoritePreferenceDismissedCookieName = "air-favorite-prompt-dismissed";
@@ -21,18 +24,39 @@ type FavoritePreference = {
 const scheelsLogoUrl =
   "https://res.cloudinary.com/dlwdq84ig/image/upload/w_3840%2Cq_auto%2Cc_scale/x1qgcm5jcooqwptm0kbq";
 
+function getEventHref(event: EventDocument) {
+  if (event.type === "camp" || event.type === "tryout") {
+    return `/register?event=${event.id}`;
+  }
+
+  if (event.type === "refScoringClinic") {
+    return "/about#ref-scoring-clinic";
+  }
+
+  return `/events/${event.id}`;
+}
+
 function buildEventCardItem(event: EventDocument): Event {
   return {
     id: event.id,
     eventName: event.title,
-    eventType: event.type === "tryout" ? "tryouts" : event.type,
+    eventType:
+      event.type === "tryout"
+        ? "tryouts"
+        : event.type === "areaCamp"
+          ? "camp"
+          : event.type === "refScoringClinic"
+            ? "clinic"
+            : event.type,
     description: event.notes,
     startsAt: `${event.startDate}T${event.startTime || "00:00"}`,
     endsAt: `${event.endDate || event.startDate}T${event.startTime || "00:00"}`,
-    teamIds: event.teamId ? [event.teamId] : [],
+    teamIds: getEventTeamIds(event),
     coachIds: [],
     playerIds: [],
     location: event.location,
+    href: getEventHref(event),
+    status: getEventStatus(event),
   };
 }
 
@@ -161,6 +185,7 @@ export default function HomePage() {
     getServerReadySnapshot,
   );
   const events = useFirestoreCollection("events");
+  const coaches = useFirestoreCollection("coaches");
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
   const [favoritePreferenceOverride, setFavoritePreferenceOverride] = useState<FavoritePreference | null>(null);
@@ -177,6 +202,7 @@ export default function HomePage() {
   const upcomingEvents = useMemo<Event[]>(() => {
     return [...events.data]
       .filter((event) => event.active !== false)
+      .filter((event) => event.type !== "areaCamp")
       .sort((a, b) => {
         const left = new Date(`${a.startDate}T${a.startTime || "00:00"}`).getTime();
         const right = new Date(`${b.startDate}T${b.startTime || "00:00"}`).getTime();
@@ -197,7 +223,9 @@ export default function HomePage() {
       };
     }
     const favoriteTeams = teams.data.filter((team) => favoritePreference.teamIds.includes(team.id));
-    const favoritePlayers = players.data.filter((player) => favoritePreference.playerIds.includes(player.id));
+    const favoritePlayers = players.data.filter(
+      (player) => isCurrentPlayer(player) && favoritePreference.playerIds.includes(player.id),
+    );
     const relatedTeamIds = new Set<string>([
       ...favoritePreference.teamIds,
       ...favoritePlayers.map((player) => player.teamId).filter(Boolean),
@@ -211,7 +239,11 @@ export default function HomePage() {
 
     const recommendedEvents = events.data
       .filter((event) => event.active !== false)
-      .filter((event) => !event.teamId || relatedTeamIds.has(event.teamId))
+      .filter((event) => event.type !== "areaCamp")
+      .filter((event) => {
+        const eventTeamIds = getEventTeamIds(event);
+        return eventTeamIds.length === 0 || eventTeamIds.some((teamId) => relatedTeamIds.has(teamId));
+      })
       .filter((event) => {
         const eventAgeGroup = getEventAgeGroup(event);
 
@@ -238,6 +270,15 @@ export default function HomePage() {
       events: recommendedEvents,
     };
   }, [events.data, favoritePreference, players.data, teams.data]);
+
+  const summary = useMemo(
+    () => ({
+      teams: teams.data.filter((team) => team.active !== false).length,
+      players: players.data.filter(isCurrentPlayer).length,
+      coaches: coaches.data.filter((coach) => coach.active !== false).length,
+    }),
+    [coaches.data, players.data, teams.data],
+  );
 
   function handleSaveFavorite(preference: FavoritePreference) {
     setFavoritePreferenceOverride(preference);
@@ -305,7 +346,7 @@ export default function HomePage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               {recommendedState.events.map((event) => (
-                <EventCard key={event.id} e={event} />
+                <EventCard key={event.id} e={event} variant="home" />
               ))}
             </div>
           )}
@@ -328,10 +369,39 @@ export default function HomePage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {upcomingEvents.map((event) => (
-              <EventCard key={event.id} e={event} />
+              <EventCard key={event.id} e={event} variant="home" />
             ))}
           </div>
         )}
+      </SectionCard>
+
+      <SectionCard title="Club Snapshot" kicker="Live Overview">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Active Teams
+            </p>
+            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)]">
+              {summary.teams}
+            </p>
+          </div>
+          <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Active Players
+            </p>
+            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)]">
+              {summary.players}
+            </p>
+          </div>
+          <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Active Coaches
+            </p>
+            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)]">
+              {summary.coaches}
+            </p>
+          </div>
+        </div>
       </SectionCard>
 
       <section className="rounded-full border border-[color:var(--line)] bg-white/90 px-5 py-4 shadow-[0_18px_40px_rgba(17,58,98,0.08)]">

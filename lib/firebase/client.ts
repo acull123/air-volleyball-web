@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const defaultFirebaseConfig = {
   apiKey: "AIzaSyAVpTSbKsShvB4So6D1VfjVKq9qgHT1_WQ",
@@ -53,6 +54,7 @@ export const firebaseApp = (() => {
 
 export const db = firebaseApp ? getFirestore(firebaseApp) : null;
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
+export const storage = firebaseApp ? getStorage(firebaseApp) : null;
 
 export function requireDb() {
   if (!db) {
@@ -62,6 +64,16 @@ export function requireDb() {
   }
 
   return db;
+}
+
+export function requireStorage() {
+  if (!storage) {
+    throw new Error(
+      "Storage has not been initialized. Check lib/firebase/client.ts or your NEXT_PUBLIC_FIREBASE_* env vars.",
+    );
+  }
+
+  return storage;
 }
 
 let analyticsPromise: Promise<import("firebase/analytics").Analytics | null> | null = null;

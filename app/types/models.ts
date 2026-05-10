@@ -1,5 +1,6 @@
 export type Gender = "female" | "male" | "coed" | "other";
-export type EventType = "practice" | "tournament" | "camp" | "tryouts" | "lesson";
+export type EventType = "practice" | "tournament" | "camp" | "tryouts" | "lesson" | "clinic";
+export type EventStatus = "none" | "accepted" | "pending" | "waitlisted";
 
 export interface Player {
   id: string;
@@ -44,6 +45,10 @@ export interface Event {
   coachIds: string[];
   playerIds: string[];
   location?: string;
+  teamName?: string;
+  href?: string;
+  scheduleUrl?: string;
+  status?: EventStatus;
 }
 
 export interface Camp {

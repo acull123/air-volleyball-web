@@ -3,14 +3,23 @@ import type { Timestamp } from "firebase/firestore";
 export type UserRole = "admin" | "parent" | "player" | "coach";
 export type ScheduleType = "practice" | "season" | "tryout" | "camp";
 export type ProgramType = "camp" | "training" | "tryout" | "privateLesson";
-export type ClubEventType = "tournament" | "practice" | "camp" | "tryout";
+export type ClubEventType =
+  | "tournament"
+  | "practice"
+  | "camp"
+  | "tryout"
+  | "areaCamp"
+  | "refScoringClinic";
 export type RegisterableEventType = "camp" | "tryout";
+export type EventStatus = "none" | "accepted" | "pending" | "waitlisted";
 export type RegistrationStatus = "submitted" | "confirmed" | "waitlisted" | "cancelled";
 export type PaymentStatus = "unpaid" | "paid" | "refunded";
 export type InvoiceStatus = "unpaid" | "paid" | "overdue" | "cancelled";
+export type ExpenseReportStatus = "pending" | "accepted" | "rejected" | "paid";
 export type Provider = "stripe";
 export type ProviderPaymentStatus = "pending" | "succeeded" | "failed" | "refunded";
 export type AnnouncementAudience = "public" | "players" | "parents" | "team";
+export type ConflictStatus = "submitted" | "reviewed" | "resolved";
 
 export type FirestoreDate = Timestamp | null;
 export type ServerDateInput = Timestamp | Date | null;
@@ -35,12 +44,15 @@ export interface PlayerDocument extends BaseDocument {
   firstName: string;
   lastName: string;
   birthDate: string;
+  school: string;
+  college: string;
   position: string;
   jerseyNumber: number;
   teamId: string;
   bio: string;
   photoUrl: string;
   active: boolean;
+  isAlumni: boolean;
 }
 
 export interface TeamDocument extends BaseDocument {
@@ -64,9 +76,12 @@ export interface CoachDocument extends BaseDocument {
   title: string;
   teamIds: string[];
   bio: string;
+  description: string;
   photoUrl: string;
   email: string;
   phone: string;
+  privateLessonPriceSingle: number;
+  privateLessonPricePair: number;
   active: boolean;
 }
 
@@ -82,13 +97,20 @@ export interface GymSpaceDocument extends BaseDocument {
   active: boolean;
 }
 
+export interface EventTeamSchedule {
+  teamId: string;
+  scheduleUrl: string;
+}
+
 export interface EventDocument extends BaseDocument {
   type: ClubEventType;
   title: string;
-  teamId: string;
+  status: EventStatus;
+  teamSchedules: EventTeamSchedule[];
   ageGroup: string;
   price: number;
   paymentUrl: string;
+  externalUrl: string;
   startDate: string;
   endDate: string;
   startTime: string;
@@ -161,6 +183,33 @@ export interface InvoiceDocument extends BaseDocument {
   paidAt: FirestoreDate;
 }
 
+export interface ExpenseReportDocument extends BaseDocument {
+  coachUserId: string;
+  coachName: string;
+  coachEmail: string;
+  title: string;
+  amount: number;
+  expenseDate: string;
+  notes: string;
+  receiptUrl: string;
+  receiptFileName: string;
+  status: ExpenseReportStatus;
+  reviewedAt: FirestoreDate;
+  reviewedBy: string;
+  paidAt: FirestoreDate;
+  paidBy: string;
+}
+
+export interface ConflictDocument extends BaseDocument {
+  userId: string;
+  playerId: string;
+  playerName: string;
+  startAt: string;
+  endAt: string;
+  reason: string;
+  status: ConflictStatus;
+}
+
 export interface PaymentDocument {
   id: string;
   invoiceId: string;
@@ -224,6 +273,8 @@ export interface FirestoreCollections {
   programs: ProgramDocument;
   registrations: RegistrationDocument;
   invoices: InvoiceDocument;
+  expenseReports: ExpenseReportDocument;
+  conflicts: ConflictDocument;
   payments: PaymentDocument;
   alumni: AlumniDocument;
   pages: PageDocument;

@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import type { CoachDocument } from "@/lib/firebase/schema";
+import { deletePhotoByUrl, uploadCoachPhoto } from "@/lib/firebase/storage";
 
 type CoachDraft = {
   firstName: string;
@@ -12,8 +13,12 @@ type CoachDraft = {
   title: string;
   teamIds: string[];
   bio: string;
+  description: string;
   email: string;
   phone: string;
+  photoUrl: string;
+  privateLessonPriceSingle: string;
+  privateLessonPricePair: string;
   active: boolean;
 };
 
@@ -23,8 +28,12 @@ const emptyDraft: CoachDraft = {
   title: "",
   teamIds: [],
   bio: "",
+  description: "",
   email: "",
   phone: "",
+  photoUrl: "",
+  privateLessonPriceSingle: "",
+  privateLessonPricePair: "",
   active: true,
 };
 
@@ -45,8 +54,12 @@ function mapCoachToDraft(coach: CoachDocument): CoachDraft {
     title: coach.title,
     teamIds: getCoachTeamIds(coach),
     bio: coach.bio,
+    description: coach.description ?? "",
     email: coach.email,
     phone: coach.phone,
+    photoUrl: coach.photoUrl ?? "",
+    privateLessonPriceSingle: String(coach.privateLessonPriceSingle ?? 0),
+    privateLessonPricePair: String(coach.privateLessonPricePair ?? 0),
     active: coach.active,
   };
 }
@@ -54,10 +67,13 @@ function mapCoachToDraft(coach: CoachDocument): CoachDraft {
 export default function CoachManagerClient() {
   const coaches = useFirestoreCollection("coaches");
   const teams = useFirestoreCollection("teams");
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCoachId, setSelectedCoachId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [draft, setDraft] = useState<CoachDraft>(emptyDraft);
   const [selectedPhotoName, setSelectedPhotoName] = useState("");
+  const [selectedPhotoFile, setSelectedPhotoFile] = useState<File | null>(null);
+  const [photoUrlToDelete, setPhotoUrlToDelete] = useState("");
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +93,17 @@ export default function CoachManagerClient() {
         .map((teamId) => teams.data.find((team) => team.id === teamId)?.name ?? "")
         .join(" ");
 
-      return [coach.firstName, coach.lastName, coach.title, coach.email, coach.phone, teamNames]
+      return [
+        coach.firstName,
+        coach.lastName,
+        coach.title,
+        coach.email,
+        coach.phone,
+        coach.description,
+        String(coach.privateLessonPriceSingle ?? 0),
+        String(coach.privateLessonPricePair ?? 0),
+        teamNames,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(normalizedSearch);
@@ -88,14 +114,38 @@ export default function CoachManagerClient() {
     setSelectedCoachId(null);
     setDraft(emptyDraft);
     setSelectedPhotoName("");
+    setSelectedPhotoFile(null);
+    setPhotoUrlToDelete("");
+    if (photoInputRef.current) {
+      photoInputRef.current.value = "";
+    }
   }
 
   function beginEdit(coach: CoachDocument) {
     setSelectedCoachId(coach.id);
     setDraft(mapCoachToDraft(coach));
     setSelectedPhotoName("");
+    setSelectedPhotoFile(null);
+    setPhotoUrlToDelete("");
     setStatus(null);
     setError(null);
+  }
+
+  function clearSelectedPhotoFile() {
+    setSelectedPhotoFile(null);
+    setSelectedPhotoName("");
+    if (photoInputRef.current) {
+      photoInputRef.current.value = "";
+    }
+  }
+
+  function removePhoto() {
+    if (draft.photoUrl) {
+      setPhotoUrlToDelete(draft.photoUrl);
+    }
+
+    setDraft((current) => ({ ...current, photoUrl: "" }));
+    clearSelectedPhotoFile();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -105,21 +155,48 @@ export default function CoachManagerClient() {
     setError(null);
 
     try {
+      const previousPhotoUrl =
+        photoUrlToDelete || (selectedPhotoFile && draft.photoUrl ? draft.photoUrl : "");
+      let photoUrl = draft.photoUrl;
+
+      if (selectedPhotoFile) {
+        photoUrl = await uploadCoachPhoto({
+          file: selectedPhotoFile,
+          coachId: selectedCoachId,
+          firstName: draft.firstName.trim(),
+          lastName: draft.lastName.trim(),
+        });
+      }
+
       const payload = {
         firstName: draft.firstName.trim(),
         lastName: draft.lastName.trim(),
         title: draft.title.trim(),
         teamIds: draft.teamIds,
         bio: draft.bio.trim(),
+        description: draft.description.trim(),
         email: draft.email.trim(),
         phone: draft.phone.trim(),
-        // TODO: Replace this with the uploaded image URL once photo uploads are connected.
-        photoUrl: "",
+        privateLessonPriceSingle: draft.privateLessonPriceSingle.trim()
+          ? Number(draft.privateLessonPriceSingle)
+          : 0,
+        privateLessonPricePair: draft.privateLessonPricePair.trim()
+          ? Number(draft.privateLessonPricePair)
+          : 0,
+        photoUrl,
         active: draft.active,
       };
 
       if (!payload.firstName || !payload.lastName) {
         throw new Error("First name and last name are required.");
+      }
+
+      if (Number.isNaN(payload.privateLessonPriceSingle) || payload.privateLessonPriceSingle < 0) {
+        throw new Error("Single-athlete lesson price must be a valid number.");
+      }
+
+      if (Number.isNaN(payload.privateLessonPricePair) || payload.privateLessonPricePair < 0) {
+        throw new Error("Two-athlete lesson price must be a valid number.");
       }
 
       if (selectedCoachId) {
@@ -128,6 +205,10 @@ export default function CoachManagerClient() {
       } else {
         await firestoreApi.coaches.create(payload);
         setStatus("Coach created.");
+      }
+
+      if (previousPhotoUrl && previousPhotoUrl !== photoUrl) {
+        await deletePhotoByUrl(previousPhotoUrl);
       }
 
       resetForm();
@@ -242,6 +323,38 @@ export default function CoachManagerClient() {
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               />
             </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              1 athlete lesson price per hour
+              <input
+                value={draft.privateLessonPriceSingle}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, privateLessonPriceSingle: event.target.value }))
+                }
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                inputMode="decimal"
+                placeholder="0.00"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              2 athlete lesson price per hour
+              <input
+                value={draft.privateLessonPricePair}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, privateLessonPricePair: event.target.value }))
+                }
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                inputMode="decimal"
+                placeholder="0.00"
+              />
+            </label>
+            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Description (optional)
+              <textarea
+                value={draft.description}
+                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
+                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Bio (optional)
               <textarea
@@ -253,14 +366,34 @@ export default function CoachManagerClient() {
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Photo (optional)
               <input
+                ref={photoInputRef}
                 type="file"
                 accept="image/*"
-                onChange={(event) => setSelectedPhotoName(event.target.files?.[0]?.name ?? "")}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] ?? null;
+                  setSelectedPhotoFile(file);
+                  setSelectedPhotoName(file?.name ?? "");
+                }}
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               />
               <span className="text-xs font-medium text-[color:var(--muted)]">
-                {selectedPhotoName ? `Selected: ${selectedPhotoName}` : "Choose a coach photo."}
+                {selectedPhotoName
+                  ? `Selected: ${selectedPhotoName}`
+                  : draft.photoUrl
+                    ? "Current photo is saved. Choose a new file to replace it."
+                    : photoUrlToDelete
+                      ? "Photo will be removed when you save."
+                      : "Choose a coach photo."}
               </span>
+              {draft.photoUrl && (
+                <button
+                  type="button"
+                  onClick={removePhoto}
+                  className="w-fit rounded-full border border-[#e7b8b8] px-4 py-2 text-sm font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2]"
+                >
+                  Remove photo
+                </button>
+              )}
             </label>
             <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
               <input
@@ -338,6 +471,18 @@ export default function CoachManagerClient() {
                     <p className="text-sm text-[color:var(--muted)]">
                       {coach.email || "No email set"}{coach.phone ? ` · ${coach.phone}` : ""}
                     </p>
+                    {(coach.privateLessonPriceSingle > 0 || coach.privateLessonPricePair > 0) && (
+                      <p className="text-sm text-[color:var(--muted)]">
+                        Lessons:
+                        {coach.privateLessonPriceSingle > 0
+                          ? ` 1 athlete $${coach.privateLessonPriceSingle.toFixed(2)}/hr`
+                          : " 1 athlete not set"}
+                        {" · "}
+                        {coach.privateLessonPricePair > 0
+                          ? `2 athletes $${coach.privateLessonPricePair.toFixed(2)}/hr`
+                          : "2 athletes not set"}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <button

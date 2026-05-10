@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import type { PlayerDocument, TeamDocument } from "@/lib/firebase/schema";
+import { comparePlayersByName } from "@/lib/player-name";
+import { isCurrentPlayer } from "@/lib/player-status";
 
 type FavoritePreference = {
   teamIds: string[];
@@ -50,8 +52,8 @@ export default function FavoritePreferenceDialog({
   const filteredPlayers = useMemo(() => {
     const normalizedSearch = playerSearch.trim().toLowerCase();
     const sortedPlayers = [...players]
-      .filter((player) => player.active !== false)
-      .sort((a, b) => `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`));
+      .filter(isCurrentPlayer)
+      .sort(comparePlayersByName);
 
     if (!normalizedSearch) {
       return sortedPlayers;

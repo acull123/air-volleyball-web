@@ -18,7 +18,6 @@ export const siteNav: NavLink[] = [
   { href: "/about", label: "About" },
   { href: "/teams", label: "Teams" },
   { href: "/training", label: "Training" },
-  { href: "/private-lessons", label: "Private Lessons" },
   { href: "/register", label: "Register" },
   { href: "/login", label: "Player Portal" },
   { href: "/admin", label: "Admin" },
@@ -371,12 +370,6 @@ export const privateLessonPackages: PrivateLessonPackage[] = [
 ];
 
 export const adminTasks: AdminTask[] = [
-  {
-    id: "ad2",
-    title: "Update alumni list",
-    detail: "Add recent graduates, edit college commitments, and publish the alumni spotlight.",
-    actionLabel: "Manage alumni",
-  },
   {
     id: "ad3",
     title: "Manage registrations",

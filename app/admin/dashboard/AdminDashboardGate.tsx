@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation";
 import AdminDashboardContent from "../AdminDashboardContent";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { isRole, useAuthSession } from "@/lib/firebase/auth";
+import { hasAnyRole, useAuthSession } from "@/lib/firebase/auth";
 
 export default function AdminDashboardGate() {
   const router = useRouter();
   const access = useAuthSession();
 
   useEffect(() => {
-    if (!access.loading && (!access.authUser || !isRole(access.authUser.profile, "admin"))) {
+    if (!access.loading && !hasAnyRole(access.authUser?.profile ?? null, ["admin", "coach"])) {
       router.replace("/admin");
     }
   }, [access.authUser, access.loading, router]);
@@ -32,7 +32,7 @@ export default function AdminDashboardGate() {
     );
   }
 
-  if (!access.authUser || !isRole(access.authUser.profile, "admin")) {
+  if (!access.authUser || !hasAnyRole(access.authUser.profile, ["admin", "coach"])) {
     return (
       <>
         <PageHero
@@ -41,11 +41,11 @@ export default function AdminDashboardGate() {
           description="Returning you to the admin sign-in page."
         />
         <SectionCard title="Redirecting" kicker="Admin Access">
-          <p className="text-sm leading-7 text-[color:var(--muted)]">You do not have admin access.</p>
+          <p className="text-sm leading-7 text-[color:var(--muted)]">You do not have staff access.</p>
         </SectionCard>
       </>
     );
   }
 
-  return <AdminDashboardContent />;
+  return <AdminDashboardContent role={access.authUser.profile.role} />;
 }

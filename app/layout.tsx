@@ -18,6 +18,11 @@ const displayFont = Bebas_Neue({
 export const metadata: Metadata = {
   title: "Air Volleyball Club",
   description: "Youth volleyball teams, camps, tryouts, private lessons, and parent portal tools.",
+  icons: {
+    icon: "/air-logo.png",
+    shortcut: "/air-logo.png",
+    apple: "/air-logo.png",
+  },
 };
 
 export default function RootLayout({
