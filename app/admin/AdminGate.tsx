@@ -72,7 +72,9 @@ export default function AdminGate() {
         <SectionCard title="Sign In" kicker="Staff Access">
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Email
+              <span>
+                Email <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
@@ -84,7 +86,9 @@ export default function AdminGate() {
             </label>
 
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Password
+              <span>
+                Password <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}

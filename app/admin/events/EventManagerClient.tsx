@@ -15,6 +15,7 @@ type EventDraft = {
   title: string;
   status: EventDocument["status"];
   teamSchedules: EventTeamSchedule[];
+  payCategoryId: string;
   ageGroup: string;
   price: string;
   paymentUrl: string;
@@ -34,6 +35,7 @@ const emptyDraft: EventDraft = {
   title: "",
   status: "none",
   teamSchedules: [],
+  payCategoryId: "",
   ageGroup: "",
   price: "0",
   paymentUrl: "",
@@ -106,6 +108,7 @@ function mapEventToDraft(event: EventDocument): EventDraft {
     title: event.title,
     status: getEventStatus(event),
     teamSchedules: getEventTeamSchedules(event),
+    payCategoryId: event.payCategoryId ?? "",
     ageGroup: event.ageGroup || legacyAgeGroups?.[0] || "",
     price: String(event.price ?? 0),
     paymentUrl: event.paymentUrl ?? "",
@@ -147,6 +150,10 @@ function formatDateRange(startDate: string, endDate: string) {
 }
 
 function formatEventTypeLabel(type: EventDocument["type"]) {
+  if (type === "twoDayTournament") {
+    return "2 Day Tournament";
+  }
+
   if (type === "areaCamp") {
     return "Area Camp";
   }
@@ -162,6 +169,7 @@ export default function EventManagerClient() {
   const events = useFirestoreCollection("events");
   const teams = useFirestoreCollection("teams");
   const registrations = useFirestoreCollection("registrations");
+  const payCategories = useFirestoreCollection("payCategories");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [draft, setDraft] = useState<EventDraft>(emptyDraft);
@@ -181,6 +189,8 @@ export default function EventManagerClient() {
 
     return sorted.filter((event) => {
       const teamName = getEventTeamLabel(event, teams.data);
+      const payCategoryName =
+        payCategories.data.find((category) => category.id === event.payCategoryId)?.name ?? "";
 
       return [
         event.title,
@@ -191,12 +201,13 @@ export default function EventManagerClient() {
         event.startTime,
         event.location,
         teamName,
+        payCategoryName,
       ]
         .join(" ")
         .toLowerCase()
         .includes(normalizedSearch);
     });
-  }, [events.data, searchTerm, teams.data]);
+  }, [events.data, payCategories.data, searchTerm, teams.data]);
 
   function resetForm() {
     setSelectedEventId(null);
@@ -229,6 +240,7 @@ export default function EventManagerClient() {
             scheduleUrl: entry.scheduleUrl.trim(),
           }))
           .filter((entry) => entry.teamId),
+        payCategoryId: draft.payCategoryId,
         ageGroup: draft.ageGroup,
         price: draft.price.trim() ? Number(draft.price) : 0,
         paymentUrl: draft.paymentUrl.trim(),
@@ -328,6 +340,7 @@ export default function EventManagerClient() {
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               >
                 <option value="tournament">Tournament</option>
+                <option value="twoDayTournament">2 Day Tournament</option>
                 <option value="practice">Practice</option>
                 <option value="camp">Camp</option>
                 <option value="tryout">Tryout</option>
@@ -351,7 +364,7 @@ export default function EventManagerClient() {
               </select>
             </label>
             <div className="md:col-span-2 flex flex-col gap-3 text-sm font-semibold text-[color:var(--ink)]">
-              Team schedules (optional)
+              Team schedules
               <div className="space-y-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
                 {teams.data.length === 0 ? (
                   <p className="text-sm font-normal text-[color:var(--muted)]">No teams have been added yet.</p>
@@ -384,7 +397,9 @@ export default function EventManagerClient() {
               </div>
             </div>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Event title
+              <span>
+                Event title <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.title}
                 onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
@@ -403,7 +418,24 @@ export default function EventManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Payment link (optional)
+              Pay category
+              <select
+                value={draft.payCategoryId}
+                onChange={(event) => setDraft((current) => ({ ...current, payCategoryId: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              >
+                <option value="">No pay category</option>
+                {[...payCategories.data]
+                  .sort((left, right) => left.name.localeCompare(right.name))
+                  .map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Payment link
               <input
                 value={draft.paymentUrl}
                 onChange={(event) => setDraft((current) => ({ ...current, paymentUrl: event.target.value }))}
@@ -412,7 +444,7 @@ export default function EventManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              External link (optional)
+              External link
               <input
                 value={draft.externalUrl}
                 onChange={(event) => setDraft((current) => ({ ...current, externalUrl: event.target.value }))}
@@ -421,7 +453,7 @@ export default function EventManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Age group (optional)
+              Age group
               <select
                 value={draft.ageGroup}
                 onChange={(event) => setDraft((current) => ({ ...current, ageGroup: event.target.value }))}
@@ -436,7 +468,9 @@ export default function EventManagerClient() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Start date
+              <span>
+                Start date <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.startDate}
                 onChange={(event) => setDraft((current) => ({ ...current, startDate: event.target.value }))}
@@ -445,7 +479,7 @@ export default function EventManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              End date (optional)
+              End date
               <input
                 value={draft.endDate}
                 onChange={(event) => setDraft((current) => ({ ...current, endDate: event.target.value }))}
@@ -454,7 +488,9 @@ export default function EventManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Start time
+              <span>
+                Start time <span className="text-[#b42318]">*</span>
+              </span>
               <div className="grid grid-cols-3 gap-3">
                 <select
                   value={draft.startHour}
@@ -494,7 +530,9 @@ export default function EventManagerClient() {
               </div>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Location
+              <span>
+                Location <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.location}
                 onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
@@ -503,7 +541,7 @@ export default function EventManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Notes (optional)
+              Notes
               <textarea
                 value={draft.notes}
                 onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}

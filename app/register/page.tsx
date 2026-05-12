@@ -431,7 +431,9 @@ export default function RegisterPage() {
               </div>
 
               <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Parent name
+                <span>
+                  Parent name <span className="text-[#b42318]">*</span>
+                </span>
                 <input
                   value={parentName}
                   onChange={(event) => setParentName(event.target.value)}
@@ -530,7 +532,9 @@ export default function RegisterPage() {
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      First name
+                      <span>
+                        First name <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={newPlayer.firstName}
                         onChange={(event) =>
@@ -540,7 +544,9 @@ export default function RegisterPage() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Last name
+                      <span>
+                        Last name <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={newPlayer.lastName}
                         onChange={(event) =>
@@ -550,7 +556,9 @@ export default function RegisterPage() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Birthdate
+                      <span>
+                        Birthdate <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={newPlayer.birthDate}
                         onChange={(event) =>
@@ -561,7 +569,7 @@ export default function RegisterPage() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Position (optional)
+                      Position
                       <input
                         value={newPlayer.position}
                         onChange={(event) =>

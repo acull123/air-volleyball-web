@@ -41,6 +41,10 @@ function formatEventType(type: string): Event["eventType"] {
     return "camp";
   }
 
+  if (type === "twoDayTournament") {
+    return "tournament";
+  }
+
   if (type === "camp" || type === "practice" || type === "tournament") {
     return type;
   }
@@ -701,7 +705,9 @@ export default function LoginPage() {
             ) : (
               <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmitConflict}>
                 <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Player
+                  <span>
+                    Player <span className="text-[#b42318]">*</span>
+                  </span>
                   <select
                     value={effectiveConflictPlayerId}
                     onChange={(event) => setConflictPlayerId(event.target.value)}
@@ -715,7 +721,9 @@ export default function LoginPage() {
                   </select>
                 </label>
                 <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Start date/time
+                  <span>
+                    Start date/time <span className="text-[#b42318]">*</span>
+                  </span>
                   <input
                     type="datetime-local"
                     value={conflictStartAt}
@@ -724,7 +732,9 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  End date/time
+                  <span>
+                    End date/time <span className="text-[#b42318]">*</span>
+                  </span>
                   <input
                     type="datetime-local"
                     value={conflictEndAt}
@@ -733,7 +743,7 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Reason (optional)
+                  Reason
                   <textarea
                     value={conflictReason}
                     onChange={(event) => setConflictReason(event.target.value)}
@@ -841,7 +851,9 @@ export default function LoginPage() {
           {mode === "signin" ? (
             <form className="space-y-4" onSubmit={handleSignIn}>
               <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Email
+                <span>
+                  Email <span className="text-[#b42318]">*</span>
+                </span>
                 <input
                   value={signInEmail}
                   onChange={(event) => setSignInEmail(event.target.value)}
@@ -850,7 +862,9 @@ export default function LoginPage() {
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Password
+                <span>
+                  Password <span className="text-[#b42318]">*</span>
+                </span>
                 <input
                   type="password"
                   value={signInPassword}
@@ -871,7 +885,9 @@ export default function LoginPage() {
             <form className="space-y-6" onSubmit={handleCreateAccount}>
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  First name
+                  <span>
+                    First name <span className="text-[#b42318]">*</span>
+                  </span>
                   <input
                     value={createFirstName}
                     onChange={(event) => setCreateFirstName(event.target.value)}
@@ -879,7 +895,9 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Last name
+                  <span>
+                    Last name <span className="text-[#b42318]">*</span>
+                  </span>
                   <input
                     value={createLastName}
                     onChange={(event) => setCreateLastName(event.target.value)}
@@ -887,7 +905,9 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Email
+                  <span>
+                    Email <span className="text-[#b42318]">*</span>
+                  </span>
                   <input
                     value={createEmail}
                     onChange={(event) => setCreateEmail(event.target.value)}
@@ -896,7 +916,9 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Password
+                  <span>
+                    Password <span className="text-[#b42318]">*</span>
+                  </span>
                   <input
                     type="password"
                     value={createPassword}
@@ -906,7 +928,7 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Phone (optional)
+                  Phone
                   <input
                     value={createPhone}
                     onChange={(event) => setCreatePhone(event.target.value)}
@@ -914,7 +936,9 @@ export default function LoginPage() {
                   />
                 </label>
                 <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Account type
+                  <span>
+                    Account type <span className="text-[#b42318]">*</span>
+                  </span>
                   <select
                     value={createRole}
                     onChange={(event) => {

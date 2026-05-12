@@ -143,6 +143,16 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /payCategories/{payCategoryId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
+    match /payTypes/{payTypeId} {
+      allow read: if isStaff();
+      allow write: if isAdmin();
+    }
+
     match /conflicts/{conflictId} {
       allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid;

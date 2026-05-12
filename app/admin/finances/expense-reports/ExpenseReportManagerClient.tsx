@@ -333,7 +333,9 @@ export default function ExpenseReportManagerClient() {
           <SectionCard title="Submit Expense Report" kicker="Coach Entry">
             <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
               <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Expense title
+                <span>
+                  Expense title <span className="text-[#b42318]">*</span>
+                </span>
                 <input
                   value={draft.title}
                   onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
@@ -342,7 +344,9 @@ export default function ExpenseReportManagerClient() {
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Amount
+                <span>
+                  Amount <span className="text-[#b42318]">*</span>
+                </span>
                 <input
                   value={draft.amount}
                   onChange={(event) => setDraft((current) => ({ ...current, amount: event.target.value }))}
@@ -352,7 +356,9 @@ export default function ExpenseReportManagerClient() {
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Expense date
+                <span>
+                  Expense date <span className="text-[#b42318]">*</span>
+                </span>
                 <input
                   value={draft.expenseDate}
                   onChange={(event) => setDraft((current) => ({ ...current, expenseDate: event.target.value }))}
@@ -370,7 +376,7 @@ export default function ExpenseReportManagerClient() {
                 />
               </label>
               <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Receipt photo (optional)
+                Receipt photo
                 <input
                   ref={receiptInputRef}
                   type="file"

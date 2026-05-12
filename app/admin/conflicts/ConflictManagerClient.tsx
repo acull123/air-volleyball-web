@@ -222,7 +222,9 @@ export default function ConflictManagerClient() {
         <SectionCard title={selectedConflictId ? "Edit Conflict" : "Add Conflict"} kicker="Scheduling">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Player
+              <span>
+                Player <span className="text-[#b42318]">*</span>
+              </span>
               <select
                 value={draft.playerId}
                 onChange={(event) => setDraft((current) => ({ ...current, playerId: event.target.value }))}
@@ -241,7 +243,9 @@ export default function ConflictManagerClient() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Start date/time
+              <span>
+                Start date/time <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 type="datetime-local"
                 value={draft.startAt}
@@ -250,7 +254,9 @@ export default function ConflictManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              End date/time
+              <span>
+                End date/time <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 type="datetime-local"
                 value={draft.endAt}
@@ -276,7 +282,7 @@ export default function ConflictManagerClient() {
               </select>
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Reason (optional)
+              Reason
               <textarea
                 value={draft.reason}
                 onChange={(event) => setDraft((current) => ({ ...current, reason: event.target.value }))}

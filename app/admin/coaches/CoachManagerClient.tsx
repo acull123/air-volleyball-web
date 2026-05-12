@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
-import type { CoachDocument } from "@/lib/firebase/schema";
+import type { ClubEventType, CoachDocument } from "@/lib/firebase/schema";
 import { deletePhotoByUrl, uploadCoachPhoto } from "@/lib/firebase/storage";
 
 type CoachDraft = {
@@ -17,6 +17,7 @@ type CoachDraft = {
   email: string;
   phone: string;
   photoUrl: string;
+  payTypeIds: string[];
   privateLessonPriceSingle: string;
   privateLessonPricePair: string;
   active: boolean;
@@ -32,6 +33,7 @@ const emptyDraft: CoachDraft = {
   email: "",
   phone: "",
   photoUrl: "",
+  payTypeIds: [],
   privateLessonPriceSingle: "",
   privateLessonPricePair: "",
   active: true,
@@ -47,6 +49,30 @@ function getCoachTeamIds(coach: CoachDocument): string[] {
   return legacyTeamId ? [legacyTeamId] : [];
 }
 
+function getCoachPayTypeIds(coach: CoachDocument): string[] {
+  return Array.isArray(coach.payTypeIds) ? coach.payTypeIds.filter(Boolean) : [];
+}
+
+function formatPayEventType(type: ClubEventType | undefined) {
+  if (type === "twoDayTournament") {
+    return "2 Day Tournament";
+  }
+
+  if (type === "areaCamp") {
+    return "Area Camp";
+  }
+
+  if (type === "refScoringClinic") {
+    return "Ref And Scoring Clinic";
+  }
+
+  if (type === "tryout") {
+    return "Tryout";
+  }
+
+  return type ? type.charAt(0).toUpperCase() + type.slice(1) : "Tournament";
+}
+
 function mapCoachToDraft(coach: CoachDocument): CoachDraft {
   return {
     firstName: coach.firstName,
@@ -58,6 +84,7 @@ function mapCoachToDraft(coach: CoachDocument): CoachDraft {
     email: coach.email,
     phone: coach.phone,
     photoUrl: coach.photoUrl ?? "",
+    payTypeIds: getCoachPayTypeIds(coach),
     privateLessonPriceSingle: String(coach.privateLessonPriceSingle ?? 0),
     privateLessonPricePair: String(coach.privateLessonPricePair ?? 0),
     active: coach.active,
@@ -67,6 +94,8 @@ function mapCoachToDraft(coach: CoachDocument): CoachDraft {
 export default function CoachManagerClient() {
   const coaches = useFirestoreCollection("coaches");
   const teams = useFirestoreCollection("teams");
+  const payCategories = useFirestoreCollection("payCategories");
+  const payTypes = useFirestoreCollection("payTypes");
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCoachId, setSelectedCoachId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -109,6 +138,20 @@ export default function CoachManagerClient() {
         .includes(normalizedSearch);
     });
   }, [coaches.data, searchTerm, teams.data]);
+  const defaultPayTypeIds = useMemo(
+    () => payTypes.data.filter((payType) => payType.defaulted).map((payType) => payType.id),
+    [payTypes.data],
+  );
+  const sortedPayTypes = useMemo(
+    () =>
+      [...payTypes.data].sort((left, right) => {
+        const leftCategory = payCategories.data.find((category) => category.id === left.categoryId)?.name ?? "";
+        const rightCategory = payCategories.data.find((category) => category.id === right.categoryId)?.name ?? "";
+
+        return `${leftCategory} ${left.description}`.localeCompare(`${rightCategory} ${right.description}`);
+      }),
+    [payCategories.data, payTypes.data],
+  );
 
   function resetForm() {
     setSelectedCoachId(null);
@@ -177,6 +220,7 @@ export default function CoachManagerClient() {
         description: draft.description.trim(),
         email: draft.email.trim(),
         phone: draft.phone.trim(),
+        payTypeIds: selectedCoachId ? draft.payTypeIds : defaultPayTypeIds,
         privateLessonPriceSingle: draft.privateLessonPriceSingle.trim()
           ? Number(draft.privateLessonPriceSingle)
           : 0,
@@ -253,7 +297,9 @@ export default function CoachManagerClient() {
         <SectionCard title={selectedCoachId ? "Edit Coach" : "Add Coach"} kicker="Coach Details">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              First name
+              <span>
+                First name <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.firstName}
                 onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
@@ -261,7 +307,9 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Last name
+              <span>
+                Last name <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.lastName}
                 onChange={(event) => setDraft((current) => ({ ...current, lastName: event.target.value }))}
@@ -269,7 +317,7 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Title (optional)
+              Title
               <input
                 value={draft.title}
                 onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
@@ -277,7 +325,7 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Teams (optional)
+              Teams
               <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
                 {teams.data.length === 0 && (
                   <span className="text-sm font-medium text-[color:var(--muted)]">
@@ -307,7 +355,7 @@ export default function CoachManagerClient() {
               </div>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Email (optional)
+              Email
               <input
                 value={draft.email}
                 onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
@@ -316,12 +364,62 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Phone (optional)
+              Phone
               <input
                 value={draft.phone}
                 onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               />
+            </label>
+            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Pay types
+              <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
+                {!selectedCoachId && defaultPayTypeIds.length > 0 && (
+                  <span className="text-sm font-medium text-[color:var(--muted)]">
+                    New coaches are automatically assigned all default pay types.
+                  </span>
+                )}
+                {sortedPayTypes.length === 0 && (
+                  <span className="text-sm font-medium text-[color:var(--muted)]">
+                    Add pay types from the finance setup page before assigning coach pay.
+                  </span>
+                )}
+                {sortedPayTypes.map((payType) => {
+                  const categoryName =
+                    payCategories.data.find((category) => category.id === payType.categoryId)?.name ??
+                    "Uncategorized";
+                  const isChecked = selectedCoachId
+                    ? draft.payTypeIds.includes(payType.id)
+                    : payType.defaulted || draft.payTypeIds.includes(payType.id);
+
+                  return (
+                    <label
+                      key={payType.id}
+                      className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={!selectedCoachId}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            payTypeIds: event.target.checked
+                              ? [...current.payTypeIds, payType.id]
+                              : current.payTypeIds.filter((payTypeId) => payTypeId !== payType.id),
+                          }))
+                        }
+                      />
+                      <span>
+                        {categoryName} · {payType.description} · ${payType.value}
+                        {" · "}
+                        {formatPayEventType(payType.eventType)}
+                        {payType.defaulted ? " · default" : ""}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               1 athlete lesson price per hour
@@ -348,7 +446,7 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Description (optional)
+              Description
               <textarea
                 value={draft.description}
                 onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
@@ -356,7 +454,7 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Bio (optional)
+              Bio
               <textarea
                 value={draft.bio}
                 onChange={(event) => setDraft((current) => ({ ...current, bio: event.target.value }))}
@@ -364,7 +462,7 @@ export default function CoachManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Photo (optional)
+              Photo
               <input
                 ref={photoInputRef}
                 type="file"

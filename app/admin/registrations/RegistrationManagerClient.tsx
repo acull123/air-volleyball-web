@@ -2,9 +2,11 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { useAuthSession } from "@/lib/firebase/auth";
 import { compareAthletesByName, comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
 
@@ -42,6 +44,7 @@ function formatEventDateRange(startDate: string, endDate: string) {
 
 export default function RegistrationManagerClient() {
   const searchParams = useSearchParams();
+  const access = useAuthSession();
   const initialEventId = searchParams.get("event") ?? "";
   const events = useFirestoreCollection("events");
   const players = useFirestoreCollection("players");
@@ -52,8 +55,10 @@ export default function RegistrationManagerClient() {
   const [parentName, setParentName] = useState("");
   const [playerSearchTerm, setPlayerSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
+  const [updatingRegistrationId, setUpdatingRegistrationId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isAdmin = access.authUser?.profile?.role === "admin";
 
   const registerableEvents = useMemo(
     () =>
@@ -165,6 +170,44 @@ export default function RegistrationManagerClient() {
     }
   }
 
+  async function markRegistrationPaid(registrationId: string) {
+    setUpdatingRegistrationId(registrationId);
+    setStatus(null);
+    setError(null);
+
+    try {
+      await firestoreApi.registrations.update(registrationId, {
+        paymentStatus: "paid",
+      });
+      setStatus("Registration marked paid.");
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Unable to update registration.");
+    } finally {
+      setUpdatingRegistrationId(null);
+    }
+  }
+
+  async function deleteRegistration(registrationId: string, playerName: string) {
+    const confirmed = window.confirm(`Remove ${playerName} from this registration?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setUpdatingRegistrationId(registrationId);
+    setStatus(null);
+    setError(null);
+
+    try {
+      await firestoreApi.registrations.remove(registrationId);
+      setStatus("Registration removed.");
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete registration.");
+    } finally {
+      setUpdatingRegistrationId(null);
+    }
+  }
+
   return (
     <>
       <PageHero
@@ -236,19 +279,64 @@ export default function RegistrationManagerClient() {
                     No players are registered yet.
                   </div>
                 ) : (
-                  eventRegistrations.map((registration) => (
-                    <div
-                      key={registration.id}
-                      className="rounded-[1.25rem] border border-[color:var(--line)] bg-white px-4 py-4"
-                    >
-                      <p className="font-semibold text-[color:var(--ink)]">
-                        {registration.athleteFirstName} {registration.athleteLastName}
-                      </p>
-                      <p className="mt-1 text-sm text-[color:var(--muted)]">
-                        {registration.status} · {registration.paymentStatus}
-                      </p>
-                    </div>
-                  ))
+                  eventRegistrations.map((registration) => {
+                    const playerName = `${registration.athleteFirstName} ${registration.athleteLastName}`.trim();
+                    const playerInfoParams = new URLSearchParams();
+
+                    if (registration.playerId) {
+                      playerInfoParams.set("player", registration.playerId);
+                    }
+
+                    if (playerName) {
+                      playerInfoParams.set("search", playerName);
+                    }
+
+                    const isUpdating = updatingRegistrationId === registration.id;
+
+                    return (
+                      <div
+                        key={registration.id}
+                        className="rounded-[1.25rem] border border-[color:var(--line)] bg-white px-4 py-4"
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <p className="font-semibold text-[color:var(--ink)]">{playerName}</p>
+                            <p className="mt-1 text-sm text-[color:var(--muted)]">
+                              {registration.status} · {registration.paymentStatus}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Link
+                              href={`/admin/players?${playerInfoParams.toString()}`}
+                              className="rounded-full border border-[color:var(--line)] px-3 py-2 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                            >
+                              View player info
+                            </Link>
+                            {isAdmin && registration.paymentStatus !== "paid" && (
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => void markRegistrationPaid(registration.id)}
+                                className="rounded-full border border-[color:var(--line)] px-3 py-2 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Mark paid
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() => void deleteRegistration(registration.id, playerName || "this player")}
+                                className="rounded-full border border-[#e7b8b8] px-3 py-2 text-xs font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2] disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -258,7 +346,7 @@ export default function RegistrationManagerClient() {
         <SectionCard title="Add Registration" kicker="Choose Player">
           <form className="space-y-5" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Parent name (optional)
+              Parent name
               <input
                 value={parentName}
                 onChange={(event) => setParentName(event.target.value)}

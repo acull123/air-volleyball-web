@@ -188,6 +188,14 @@ export const firestoreApi = {
     listByStatus: (status: FirestoreCollections["expenseReports"]["status"]) =>
       listDocuments("expenseReports", [where("status", "==", status), orderBy("createdAt", "desc")]),
   },
+  payCategories: {
+    ...buildCollectionStore("payCategories"),
+  },
+  payTypes: {
+    ...buildCollectionStore("payTypes"),
+    listByCategory: (categoryId: string) =>
+      listDocuments("payTypes", [where("categoryId", "==", categoryId)]),
+  },
   conflicts: {
     ...buildCollectionStore("conflicts"),
     listByUser: (userId: string) =>

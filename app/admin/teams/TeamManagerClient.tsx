@@ -367,7 +367,9 @@ export default function TeamManagerClient() {
         <SectionCard title={selectedTeamId ? "Edit Team" : "Add Team"} kicker="Team Details">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Team name
+              <span>
+                Team name <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.name}
                 onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
@@ -375,7 +377,7 @@ export default function TeamManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Season (optional)
+              Season
               <input
                 value={draft.season}
                 onChange={(event) => setDraft((current) => ({ ...current, season: event.target.value }))}
@@ -383,7 +385,7 @@ export default function TeamManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Age group (optional)
+              Age group
               <select
                 value={draft.ageGroup}
                 onChange={(event) => setDraft((current) => ({ ...current, ageGroup: event.target.value }))}
@@ -398,7 +400,7 @@ export default function TeamManagerClient() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Level (optional)
+              Level
               <input
                 value={draft.level}
                 onChange={(event) => setDraft((current) => ({ ...current, level: event.target.value }))}
@@ -406,7 +408,9 @@ export default function TeamManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Practices per week
+              <span>
+                Practices per week <span className="text-[#b42318]">*</span>
+              </span>
               <select
                 value={draft.practicesPerWeek}
                 onChange={(event) =>
@@ -422,7 +426,9 @@ export default function TeamManagerClient() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Practice length
+              <span>
+                Practice length <span className="text-[#b42318]">*</span>
+              </span>
               <select
                 value={draft.practiceDurationMinutes}
                 onChange={(event) =>
@@ -437,7 +443,7 @@ export default function TeamManagerClient() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Schedule ID (optional)
+              Schedule ID
               <input
                 value={draft.scheduleId}
                 onChange={(event) => setDraft((current) => ({ ...current, scheduleId: event.target.value }))}
@@ -445,7 +451,7 @@ export default function TeamManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Description (optional)
+              Description
               <textarea
                 value={draft.description}
                 onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
@@ -453,7 +459,7 @@ export default function TeamManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Players (optional)
+              Players
               <input
                 value={playerFilter}
                 onChange={(event) => setPlayerFilter(event.target.value)}
@@ -499,7 +505,7 @@ export default function TeamManagerClient() {
               </div>
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Coaches (optional)
+              Coaches
               <input
                 value={coachFilter}
                 onChange={(event) => setCoachFilter(event.target.value)}
@@ -548,7 +554,7 @@ export default function TeamManagerClient() {
               </div>
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Photo (optional)
+              Photo
               <input
                 type="file"
                 accept="image/*"

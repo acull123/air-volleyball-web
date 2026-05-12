@@ -262,7 +262,9 @@ export default function GymSpaceManagerClient() {
         >
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Facility name
+              <span>
+                Facility name <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.facilityName}
                 onChange={(event) => setDraft((current) => ({ ...current, facilityName: event.target.value }))}
@@ -271,7 +273,9 @@ export default function GymSpaceManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Number of courts
+              <span>
+                Number of courts <span className="text-[#b42318]">*</span>
+              </span>
               <select
                 value={draft.courtCount}
                 onChange={(event) => setDraft((current) => ({ ...current, courtCount: event.target.value }))}
@@ -285,7 +289,7 @@ export default function GymSpaceManagerClient() {
               </select>
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Location (optional)
+              Location
               <input
                 value={draft.location}
                 onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
@@ -294,7 +298,9 @@ export default function GymSpaceManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Available days
+              <span>
+                Available days <span className="text-[#b42318]">*</span>
+              </span>
               <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] px-4 py-4 md:grid-cols-2">
                 {daysOfWeek.map((day) => (
                   <label
@@ -319,7 +325,9 @@ export default function GymSpaceManagerClient() {
               </div>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Start time
+              <span>
+                Start time <span className="text-[#b42318]">*</span>
+              </span>
               <div className="grid grid-cols-3 gap-3">
                 <select
                   value={draft.startHour}
@@ -359,7 +367,9 @@ export default function GymSpaceManagerClient() {
               </div>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              End time
+              <span>
+                End time <span className="text-[#b42318]">*</span>
+              </span>
               <div className="grid grid-cols-3 gap-3">
                 <select
                   value={draft.endHour}
@@ -399,7 +409,7 @@ export default function GymSpaceManagerClient() {
               </div>
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Blocked dates (optional)
+              Blocked dates
               <textarea
                 value={draft.blockedDates}
                 onChange={(event) => setDraft((current) => ({ ...current, blockedDates: event.target.value }))}
@@ -408,7 +418,7 @@ export default function GymSpaceManagerClient() {
               />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Notes (optional)
+              Notes
               <textarea
                 value={draft.notes}
                 onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}

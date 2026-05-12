@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
@@ -57,6 +58,9 @@ function mapPlayerToDraft(player: PlayerDocument): PlayerDraft {
 }
 
 export default function PlayerManagerClient() {
+  const searchParams = useSearchParams();
+  const initialPlayerId = searchParams.get("player") ?? "";
+  const initialSearchTerm = searchParams.get("search") ?? "";
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
   const photoInputRef = useRef<HTMLInputElement | null>(null);
@@ -69,6 +73,41 @@ export default function PlayerManagerClient() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (players.loading) {
+      return;
+    }
+
+    if (!initialPlayerId && initialSearchTerm && !searchTerm) {
+      queueMicrotask(() => setSearchTerm(initialSearchTerm));
+      return;
+    }
+
+    if (!initialPlayerId || selectedPlayerId === initialPlayerId) {
+      return;
+    }
+
+    const player = players.data.find((entry) => entry.id === initialPlayerId);
+
+    queueMicrotask(() => {
+      if (!player) {
+        if (initialSearchTerm) {
+          setSearchTerm(initialSearchTerm);
+        }
+        return;
+      }
+
+      setSelectedPlayerId(player.id);
+      setDraft(mapPlayerToDraft(player));
+      setSearchTerm(initialSearchTerm || `${player.firstName} ${player.lastName}`.trim());
+      setSelectedPhotoName("");
+      setSelectedPhotoFile(null);
+      setPhotoUrlToDelete("");
+      setStatus(null);
+      setError(null);
+    });
+  }, [initialPlayerId, initialSearchTerm, players.data, players.loading, searchTerm, selectedPlayerId]);
 
   const filteredPlayers = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -234,7 +273,9 @@ export default function PlayerManagerClient() {
         >
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              First name
+              <span>
+                First name <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.firstName}
                 onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
@@ -242,7 +283,9 @@ export default function PlayerManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Last name
+              <span>
+                Last name <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.lastName}
                 onChange={(event) => setDraft((current) => ({ ...current, lastName: event.target.value }))}
@@ -250,7 +293,9 @@ export default function PlayerManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Birthdate
+              <span>
+                Birthdate <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={draft.birthDate}
                 onChange={(event) => setDraft((current) => ({ ...current, birthDate: event.target.value }))}

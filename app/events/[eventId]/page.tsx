@@ -61,6 +61,10 @@ function formatMoney(amount: number) {
 }
 
 function formatEventType(type: EventDocument["type"]) {
+  if (type === "twoDayTournament") {
+    return "2 Day Tournament";
+  }
+
   if (type === "areaCamp") {
     return "Area Camp";
   }

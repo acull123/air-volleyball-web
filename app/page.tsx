@@ -43,6 +43,8 @@ function buildEventCardItem(event: EventDocument): Event {
     eventType:
       event.type === "tryout"
         ? "tryouts"
+        : event.type === "twoDayTournament"
+          ? "tournament"
         : event.type === "areaCamp"
           ? "camp"
           : event.type === "refScoringClinic"

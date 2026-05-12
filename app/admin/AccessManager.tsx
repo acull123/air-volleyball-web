@@ -83,7 +83,9 @@ export default function AccessManager() {
 
           <form className="grid gap-4" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Email
+              <span>
+                Email <span className="text-[#b42318]">*</span>
+              </span>
               <input
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}

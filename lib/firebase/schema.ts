@@ -5,6 +5,7 @@ export type ScheduleType = "practice" | "season" | "tryout" | "camp";
 export type ProgramType = "camp" | "training" | "tryout" | "privateLesson";
 export type ClubEventType =
   | "tournament"
+  | "twoDayTournament"
   | "practice"
   | "camp"
   | "tryout"
@@ -82,6 +83,7 @@ export interface CoachDocument extends BaseDocument {
   phone: string;
   privateLessonPriceSingle: number;
   privateLessonPricePair: number;
+  payTypeIds: string[];
   active: boolean;
 }
 
@@ -107,6 +109,7 @@ export interface EventDocument extends BaseDocument {
   title: string;
   status: EventStatus;
   teamSchedules: EventTeamSchedule[];
+  payCategoryId: string;
   ageGroup: string;
   price: number;
   paymentUrl: string;
@@ -117,6 +120,18 @@ export interface EventDocument extends BaseDocument {
   location: string;
   notes: string;
   active: boolean;
+}
+
+export interface PayCategoryDocument extends BaseDocument {
+  name: string;
+}
+
+export interface PayTypeDocument extends BaseDocument {
+  categoryId: string;
+  eventType: ClubEventType;
+  description: string;
+  value: number;
+  defaulted: boolean;
 }
 
 export interface ScheduleItem {
@@ -274,6 +289,8 @@ export interface FirestoreCollections {
   registrations: RegistrationDocument;
   invoices: InvoiceDocument;
   expenseReports: ExpenseReportDocument;
+  payCategories: PayCategoryDocument;
+  payTypes: PayTypeDocument;
   conflicts: ConflictDocument;
   payments: PaymentDocument;
   alumni: AlumniDocument;

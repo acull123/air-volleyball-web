@@ -115,6 +115,20 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
               Open expense reports
             </div>
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin/finances/pay-setup"
+              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            >
+              <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Pay setup</h2>
+              <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                Manage pay categories, pay types, default coach assignments, and event pay setup.
+              </p>
+              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
+                Open pay setup
+              </div>
+            </Link>
+          )}
         </div>
       </SectionCard>
 
