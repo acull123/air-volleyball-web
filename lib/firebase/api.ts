@@ -73,11 +73,11 @@ async function createDocument<K extends CollectionName>(
 
   if (id) {
     const ref = documentRef(name, id);
-    await setDoc(ref, applyTimestamps({ id, ...rest }, "create") as FirestoreCollections[K]);
+    await setDoc(ref, applyTimestamps({ id, ...rest } as FirestoreCollections[K], "create"));
     return id;
   }
 
-  const ref = await addDoc(collectionRef(name), applyTimestamps(rest, "create") as FirestoreCollections[K]);
+  const ref = await addDoc(collectionRef(name), applyTimestamps(rest as FirestoreCollections[K], "create"));
   await updateDoc(ref, { id: ref.id });
   return ref.id;
 }

@@ -1,6 +1,7 @@
 import {
   onSnapshot,
   query,
+  type Query,
   type QueryDocumentSnapshot,
   type DocumentData,
   type FirestoreError,
@@ -52,11 +53,11 @@ export function subscribeToCollection<K extends CollectionName>(
   },
 ) {
   const baseRef = collectionRef(name);
-  const targetQuery =
+  const targetQuery: Query<DocumentData> =
     options?.constraints && options.constraints.length > 0 ? query(baseRef, ...options.constraints) : baseRef;
 
   return onSnapshot(
-    targetQuery as DocumentData,
+    targetQuery,
     (snapshot) => {
       onData(snapshot.docs.map((docItem) => withDocumentId<K>(docItem)));
     },

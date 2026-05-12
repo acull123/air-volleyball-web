@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import PageHero from "../components/PageHero";
 import SectionCard from "../components/SectionCard";
@@ -44,7 +44,7 @@ function PhoneIcon() {
   );
 }
 
-export default function PlayersPage() {
+function PlayersPageContent() {
   const searchParams = useSearchParams();
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
@@ -261,5 +261,13 @@ export default function PlayersPage() {
       )}
 
     </>
+  );
+}
+
+export default function PlayersPage() {
+  return (
+    <Suspense fallback={null}>
+      <PlayersPageContent />
+    </Suspense>
   );
 }

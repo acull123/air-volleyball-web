@@ -143,7 +143,7 @@ export default function RegistrationManagerClient() {
       await firestoreApi.registrations.create({
         eventId: selectedEvent.id,
         eventTitle: selectedEvent.title,
-        eventType: selectedEvent.type,
+        eventType: selectedEvent.type as "camp" | "tryout",
         eventPrice: selectedEvent.price ?? 0,
         playerId: selectedPlayer.id,
         isNewPlayer: false,

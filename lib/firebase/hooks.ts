@@ -45,7 +45,12 @@ export function useFirestoreCollection<K extends CollectionName>(
     }
 
     const unsubscribe = firestoreApi[name].subscribe(
-      (data) => setState({ key: subscriptionKey, data, error: null }),
+      (data) =>
+        setState({
+          key: subscriptionKey,
+          data: data as FirestoreCollections[K][],
+          error: null,
+        }),
       options?.constraints,
       (error) => setState({ key: subscriptionKey, data: [], error: error.message }),
     );
@@ -84,7 +89,12 @@ export function useFirestoreDocument<K extends CollectionName>(
 
     const unsubscribe = firestoreApi[name].subscribeById(
       id,
-      (data) => setState({ key: subscriptionKey, data, error: null }),
+      (data) =>
+        setState({
+          key: subscriptionKey,
+          data: data as FirestoreCollections[K] | null,
+          error: null,
+        }),
       (error) => setState({ key: subscriptionKey, data: null, error: error.message }),
     );
 

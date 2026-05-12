@@ -71,7 +71,7 @@ function parseStoredTime(value: string, fallbackHour: string, fallbackMeridiem: 
   return {
     hour: String(hour24 % 12 || 12),
     minute: rawMinute,
-    meridiem: hour24 >= 12 ? "PM" : "AM",
+    meridiem: (hour24 >= 12 ? "PM" : "AM") as "AM" | "PM",
   };
 }
 
@@ -145,7 +145,7 @@ export default function GymSpaceManagerClient() {
   const filteredGymSpaces = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const sorted = [...gymSpaces.data].sort((a, b) =>
-      `${a.facilityName} ${a.spaceName}`.localeCompare(`${b.facilityName} ${b.spaceName}`),
+      a.facilityName.localeCompare(b.facilityName),
     );
 
     if (!normalizedSearch) {
@@ -155,7 +155,6 @@ export default function GymSpaceManagerClient() {
     return sorted.filter((gymSpace) =>
       [
         gymSpace.facilityName,
-        gymSpace.spaceName,
         gymSpace.location,
         gymSpace.availableDays.join(" "),
         gymSpace.notes,

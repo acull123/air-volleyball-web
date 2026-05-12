@@ -32,7 +32,9 @@ export default function AdminDashboardGate() {
     );
   }
 
-  if (!access.authUser || !hasAnyRole(access.authUser.profile, ["admin", "coach"])) {
+  const profile = access.authUser?.profile ?? null;
+
+  if (!access.authUser || !profile || !hasAnyRole(profile, ["admin", "coach"])) {
     return (
       <>
         <PageHero
@@ -47,5 +49,5 @@ export default function AdminDashboardGate() {
     );
   }
 
-  return <AdminDashboardContent role={access.authUser.profile.role} />;
+  return <AdminDashboardContent role={profile.role} />;
 }

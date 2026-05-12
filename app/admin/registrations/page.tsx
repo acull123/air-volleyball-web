@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import RegistrationManagerClient from "./RegistrationManagerClient";
 import StaffAccessGate from "../scheduling/StaffAccessGate";
 
@@ -9,7 +10,9 @@ export default function AdminRegistrationsPage() {
       description="Manage camp and tryout registrations for players."
       deniedMessage="You do not have access to manage registrations."
     >
-      <RegistrationManagerClient />
+      <Suspense fallback={null}>
+        <RegistrationManagerClient />
+      </Suspense>
     </StaffAccessGate>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import PageHero from "../components/PageHero";
@@ -119,7 +119,7 @@ function normalizeValue(value: string) {
   return value.trim().toLowerCase();
 }
 
-export default function RegisterPage() {
+function RegisterPageContent() {
   const searchParams = useSearchParams();
   const initialEventId = searchParams.get("event") ?? "";
   const payPalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
@@ -672,5 +672,13 @@ export default function RegisterPage() {
         </div>
       </SectionCard>
     </>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={null}>
+      <RegisterPageContent />
+    </Suspense>
   );
 }
