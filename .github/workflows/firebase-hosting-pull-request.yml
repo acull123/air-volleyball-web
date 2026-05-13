@@ -19,3 +19,7 @@ jobs:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AIR_VOLLEYBALL }}
           projectId: air-volleyball
+          firebaseToolsVersion: 15.17.0
+          force: true
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks

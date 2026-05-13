@@ -22,3 +22,7 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_AIR_VOLLEYBALL }}
           channelId: live
           projectId: air-volleyball
+          firebaseToolsVersion: 15.17.0
+          force: true
+        env:
+          FIREBASE_CLI_EXPERIMENTS: webframeworks
