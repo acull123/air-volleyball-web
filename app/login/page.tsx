@@ -15,7 +15,7 @@ import type { ConflictDocument, RegistrationDocument } from "@/lib/firebase/sche
 import type { Event } from "../types/models";
 
 type PortalMode = "signin" | "create";
-type AccountRole = "parent" | "player";
+type AccountRole = "parent" | "player" | "unverifiedCoach";
 
 const portalHighlights = [
   "Link one or more players to your account when you create it.",
@@ -427,7 +427,7 @@ export default function LoginPage() {
       return;
     }
 
-    if (selectedPlayerIds.length === 0) {
+    if (createRole !== "unverifiedCoach" && selectedPlayerIds.length === 0) {
       setError("Select at least one player for this account.");
       return;
     }
@@ -449,7 +449,7 @@ export default function LoginPage() {
         lastName: createLastName.trim(),
         phone: createPhone.trim(),
         role: createRole,
-        playerIds: selectedPlayerIds,
+        playerIds: createRole === "unverifiedCoach" ? [] : selectedPlayerIds,
       });
 
       setStatus("Account created.");
@@ -949,63 +949,70 @@ export default function LoginPage() {
                   >
                     <option value="parent">Parent account</option>
                     <option value="player">Player account</option>
+                    <option value="unverifiedCoach">Coach account</option>
                   </select>
                 </label>
               </div>
 
-              <div className="space-y-4">
-                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Search players
-                  <input
-                    value={playerSearchTerm}
-                    onChange={(event) => setPlayerSearchTerm(event.target.value)}
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                    placeholder="Search by player name, team, or position"
-                  />
-                </label>
-                <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                  {createRole === "parent"
-                    ? "Choose one or more players for this account."
-                    : "Choose the player profile for this account."}
+              {createRole === "unverifiedCoach" ? (
+                <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-4 py-4 text-sm leading-7 text-[color:var(--muted)]">
+                  Coach accounts are created as unverified. An admin will approve the account and link it to a coach profile.
                 </div>
-                <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-2">
-                  {players.loading || teams.loading ? (
-                    <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                      Loading players...
-                    </div>
-                  ) : filteredPlayers.length === 0 ? (
-                    <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                      No players match the current search.
-                    </div>
-                  ) : (
-                    filteredPlayers.map((player) => {
-                      const teamName = teams.data.find((team) => team.id === player.teamId)?.name ?? "No team assigned";
-                      const isSelected = selectedPlayerIds.includes(player.id);
+              ) : (
+                <div className="space-y-4">
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Search players
+                    <input
+                      value={playerSearchTerm}
+                      onChange={(event) => setPlayerSearchTerm(event.target.value)}
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      placeholder="Search by player name, team, or position"
+                    />
+                  </label>
+                  <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                    {createRole === "parent"
+                      ? "Choose one or more players for this account."
+                      : "Choose the player profile for this account."}
+                  </div>
+                  <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-2">
+                    {players.loading || teams.loading ? (
+                      <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                        Loading players...
+                      </div>
+                    ) : filteredPlayers.length === 0 ? (
+                      <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                        No players match the current search.
+                      </div>
+                    ) : (
+                      filteredPlayers.map((player) => {
+                        const teamName = teams.data.find((team) => team.id === player.teamId)?.name ?? "No team assigned";
+                        const isSelected = selectedPlayerIds.includes(player.id);
 
-                      return (
-                        <button
-                          key={player.id}
-                          type="button"
-                          onClick={() => togglePlayer(player.id)}
-                          className={`w-full text-left ${
-                            isSelected
-                              ? portalSelectedCardClass
-                              : portalInteractiveCardClass
-                          }`}
-                        >
-                          <p className={`text-lg font-bold ${isSelected ? "text-white" : "text-[color:var(--ink)] group-hover:text-white"}`}>
-                            {player.firstName} {player.lastName}
-                          </p>
-                          <div className={`mt-2 space-y-1 text-sm ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
-                            <p>Team: {teamName}</p>
-                            <p>Position: {player.position || "Position coming soon"}</p>
-                          </div>
-                        </button>
-                      );
-                    })
-                  )}
+                        return (
+                          <button
+                            key={player.id}
+                            type="button"
+                            onClick={() => togglePlayer(player.id)}
+                            className={`w-full text-left ${
+                              isSelected
+                                ? portalSelectedCardClass
+                                : portalInteractiveCardClass
+                            }`}
+                          >
+                            <p className={`text-lg font-bold ${isSelected ? "text-white" : "text-[color:var(--ink)] group-hover:text-white"}`}>
+                              {player.firstName} {player.lastName}
+                            </p>
+                            <div className={`mt-2 space-y-1 text-sm ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
+                              <p>Team: {teamName}</p>
+                              <p>Position: {player.position || "Position coming soon"}</p>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <button
                 type="submit"

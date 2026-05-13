@@ -1,6 +1,6 @@
 import type { Timestamp } from "firebase/firestore";
 
-export type UserRole = "admin" | "parent" | "player" | "coach";
+export type UserRole = "admin" | "parent" | "player" | "coach" | "unverifiedCoach";
 export type ScheduleType = "practice" | "season" | "tryout" | "camp";
 export type ProgramType = "camp" | "training" | "tryout" | "privateLesson";
 export type ClubEventType =
@@ -39,6 +39,8 @@ export interface UserDocument extends BaseDocument {
   phone: string;
   role: UserRole;
   playerIds: string[];
+  coachId: string;
+  active: boolean;
 }
 
 export interface PlayerDocument extends BaseDocument {
@@ -109,7 +111,7 @@ export interface EventDocument extends BaseDocument {
   title: string;
   status: EventStatus;
   teamSchedules: EventTeamSchedule[];
-  payCategoryId: string;
+  expenseTriggered: string[];
   ageGroup: string;
   price: number;
   paymentUrl: string;
@@ -122,12 +124,7 @@ export interface EventDocument extends BaseDocument {
   active: boolean;
 }
 
-export interface PayCategoryDocument extends BaseDocument {
-  name: string;
-}
-
 export interface PayTypeDocument extends BaseDocument {
-  categoryId: string;
   eventType: ClubEventType;
   description: string;
   value: number;
@@ -289,7 +286,6 @@ export interface FirestoreCollections {
   registrations: RegistrationDocument;
   invoices: InvoiceDocument;
   expenseReports: ExpenseReportDocument;
-  payCategories: PayCategoryDocument;
   payTypes: PayTypeDocument;
   conflicts: ConflictDocument;
   payments: PaymentDocument;

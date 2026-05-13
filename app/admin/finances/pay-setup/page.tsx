@@ -6,7 +6,7 @@ export default function AdminPaySetupPage() {
     <StaffAccessGate
       eyebrow="Finances"
       title="Pay Setup"
-      description="Manage coach pay categories and pay types."
+      description="Manage coach pay types and event type matching."
       deniedMessage="You do not have access to pay setup."
     >
       <PaySetupManagerClient />

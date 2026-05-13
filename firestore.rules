@@ -14,7 +14,10 @@ service cloud.firestore {
     }
 
     function userRole() {
-      return hasUserProfile() ? currentUserDoc().data.role : null;
+      return hasUserProfile()
+        && (!("active" in currentUserDoc().data) || currentUserDoc().data.active != false)
+        ? currentUserDoc().data.role
+        : null;
     }
 
     function isAdmin() {
@@ -40,12 +43,12 @@ service cloud.firestore {
           isOwner(userId)
           && request.resource.data.id == userId
           && request.resource.data.authUid == userId
-          && request.resource.data.role in ["parent", "player"]
+          && request.resource.data.role in ["parent", "player", "unverifiedCoach"]
         );
       allow update: if isAdmin()
         || (
           isOwner(userId)
-          && resource.data.role in ["parent", "player"]
+          && resource.data.role in ["parent", "player", "unverifiedCoach"]
           && request.resource.data.id == resource.data.id
           && request.resource.data.authUid == resource.data.authUid
           && request.resource.data.role == resource.data.role
@@ -141,11 +144,6 @@ service cloud.firestore {
           && request.resource.data.status == "pending"
         );
       allow delete: if isAdmin();
-    }
-
-    match /payCategories/{payCategoryId} {
-      allow read: if isStaff();
-      allow write: if isAdmin();
     }
 
     match /payTypes/{payTypeId} {

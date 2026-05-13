@@ -20,7 +20,6 @@ export const collectionNames: CollectionName[] = [
   "registrations",
   "invoices",
   "expenseReports",
-  "payCategories",
   "payTypes",
   "conflicts",
   "payments",

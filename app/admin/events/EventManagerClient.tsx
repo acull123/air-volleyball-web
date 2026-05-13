@@ -15,7 +15,6 @@ type EventDraft = {
   title: string;
   status: EventDocument["status"];
   teamSchedules: EventTeamSchedule[];
-  payCategoryId: string;
   ageGroup: string;
   price: string;
   paymentUrl: string;
@@ -35,7 +34,6 @@ const emptyDraft: EventDraft = {
   title: "",
   status: "none",
   teamSchedules: [],
-  payCategoryId: "",
   ageGroup: "",
   price: "0",
   paymentUrl: "",
@@ -108,7 +106,6 @@ function mapEventToDraft(event: EventDocument): EventDraft {
     title: event.title,
     status: getEventStatus(event),
     teamSchedules: getEventTeamSchedules(event),
-    payCategoryId: event.payCategoryId ?? "",
     ageGroup: event.ageGroup || legacyAgeGroups?.[0] || "",
     price: String(event.price ?? 0),
     paymentUrl: event.paymentUrl ?? "",
@@ -169,7 +166,6 @@ export default function EventManagerClient() {
   const events = useFirestoreCollection("events");
   const teams = useFirestoreCollection("teams");
   const registrations = useFirestoreCollection("registrations");
-  const payCategories = useFirestoreCollection("payCategories");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [draft, setDraft] = useState<EventDraft>(emptyDraft);
@@ -189,8 +185,6 @@ export default function EventManagerClient() {
 
     return sorted.filter((event) => {
       const teamName = getEventTeamLabel(event, teams.data);
-      const payCategoryName =
-        payCategories.data.find((category) => category.id === event.payCategoryId)?.name ?? "";
 
       return [
         event.title,
@@ -201,13 +195,12 @@ export default function EventManagerClient() {
         event.startTime,
         event.location,
         teamName,
-        payCategoryName,
       ]
         .join(" ")
         .toLowerCase()
         .includes(normalizedSearch);
     });
-  }, [events.data, payCategories.data, searchTerm, teams.data]);
+  }, [events.data, searchTerm, teams.data]);
 
   function resetForm() {
     setSelectedEventId(null);
@@ -240,7 +233,6 @@ export default function EventManagerClient() {
             scheduleUrl: entry.scheduleUrl.trim(),
           }))
           .filter((entry) => entry.teamId),
-        payCategoryId: draft.payCategoryId,
         ageGroup: draft.ageGroup,
         price: draft.price.trim() ? Number(draft.price) : 0,
         paymentUrl: draft.paymentUrl.trim(),
@@ -265,7 +257,10 @@ export default function EventManagerClient() {
         await firestoreApi.events.update(selectedEventId, payload);
         setStatus("Event updated.");
       } else {
-        await firestoreApi.events.create(payload);
+        await firestoreApi.events.create({
+          ...payload,
+          expenseTriggered: [],
+        });
         setStatus("Event created.");
       }
 
@@ -416,23 +411,6 @@ export default function EventManagerClient() {
                 inputMode="decimal"
                 placeholder="0.00"
               />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Pay category
-              <select
-                value={draft.payCategoryId}
-                onChange={(event) => setDraft((current) => ({ ...current, payCategoryId: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="">No pay category</option>
-                {[...payCategories.data]
-                  .sort((left, right) => left.name.localeCompare(right.name))
-                  .map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-              </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Payment link

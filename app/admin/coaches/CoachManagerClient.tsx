@@ -94,7 +94,6 @@ function mapCoachToDraft(coach: CoachDocument): CoachDraft {
 export default function CoachManagerClient() {
   const coaches = useFirestoreCollection("coaches");
   const teams = useFirestoreCollection("teams");
-  const payCategories = useFirestoreCollection("payCategories");
   const payTypes = useFirestoreCollection("payTypes");
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedCoachId, setSelectedCoachId] = useState<string | null>(null);
@@ -138,19 +137,12 @@ export default function CoachManagerClient() {
         .includes(normalizedSearch);
     });
   }, [coaches.data, searchTerm, teams.data]);
-  const defaultPayTypeIds = useMemo(
-    () => payTypes.data.filter((payType) => payType.defaulted).map((payType) => payType.id),
-    [payTypes.data],
-  );
   const sortedPayTypes = useMemo(
     () =>
-      [...payTypes.data].sort((left, right) => {
-        const leftCategory = payCategories.data.find((category) => category.id === left.categoryId)?.name ?? "";
-        const rightCategory = payCategories.data.find((category) => category.id === right.categoryId)?.name ?? "";
-
-        return `${leftCategory} ${left.description}`.localeCompare(`${rightCategory} ${right.description}`);
-      }),
-    [payCategories.data, payTypes.data],
+      [...payTypes.data].sort((left, right) =>
+        `${left.eventType ?? ""} ${left.description}`.localeCompare(`${right.eventType ?? ""} ${right.description}`),
+      ),
+    [payTypes.data],
   );
 
   function resetForm() {
@@ -198,6 +190,10 @@ export default function CoachManagerClient() {
     setError(null);
 
     try {
+      if (!selectedCoachId) {
+        throw new Error("Coach profiles are created from verified coach accounts in Account Management.");
+      }
+
       const previousPhotoUrl =
         photoUrlToDelete || (selectedPhotoFile && draft.photoUrl ? draft.photoUrl : "");
       let photoUrl = draft.photoUrl;
@@ -220,7 +216,7 @@ export default function CoachManagerClient() {
         description: draft.description.trim(),
         email: draft.email.trim(),
         phone: draft.phone.trim(),
-        payTypeIds: selectedCoachId ? draft.payTypeIds : defaultPayTypeIds,
+        payTypeIds: draft.payTypeIds,
         privateLessonPriceSingle: draft.privateLessonPriceSingle.trim()
           ? Number(draft.privateLessonPriceSingle)
           : 0,
@@ -243,13 +239,8 @@ export default function CoachManagerClient() {
         throw new Error("Two-athlete lesson price must be a valid number.");
       }
 
-      if (selectedCoachId) {
-        await firestoreApi.coaches.update(selectedCoachId, payload);
-        setStatus("Coach updated.");
-      } else {
-        await firestoreApi.coaches.create(payload);
-        setStatus("Coach created.");
-      }
+      await firestoreApi.coaches.update(selectedCoachId, payload);
+      setStatus("Coach updated.");
 
       if (previousPhotoUrl && previousPhotoUrl !== photoUrl) {
         await deletePhotoByUrl(previousPhotoUrl);
@@ -289,12 +280,30 @@ export default function CoachManagerClient() {
       <PageHero
         eyebrow="Coach Manager"
         title="Manage Coaches"
-        description="Add new coaches, update coach details, and remove old records from the coach list."
+        description="Update coach details, team assignments, and pay setup for verified coach accounts."
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
 
       <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard title={selectedCoachId ? "Edit Coach" : "Add Coach"} kicker="Coach Details">
+        <SectionCard title={selectedCoachId ? "Edit Coach" : "Coach Account Setup"} kicker="Coach Details">
+          {!selectedCoachId ? (
+            <div className="space-y-4">
+              <div className="rounded-[1.5rem] border border-[color:var(--line)] bg-[color:var(--paper)] px-5 py-5">
+                <p className="text-lg font-bold text-[color:var(--ink)]">
+                  Coach profiles are created from coach accounts.
+                </p>
+                <p className="mt-3 text-sm leading-7 text-[color:var(--muted)]">
+                  Have the coach create their own account from the player portal and choose Coach account. Then go to Account Management, select that user, change the role to Coach, and complete the coach setup fields. That creates and links the coach profile automatically.
+                </p>
+              </div>
+              <a
+                href="/admin/users"
+                className="inline-flex rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white"
+              >
+                Open account management
+              </a>
+            </div>
+          ) : (
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               <span>
@@ -374,23 +383,13 @@ export default function CoachManagerClient() {
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Pay types
               <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
-                {!selectedCoachId && defaultPayTypeIds.length > 0 && (
-                  <span className="text-sm font-medium text-[color:var(--muted)]">
-                    New coaches are automatically assigned all default pay types.
-                  </span>
-                )}
                 {sortedPayTypes.length === 0 && (
                   <span className="text-sm font-medium text-[color:var(--muted)]">
                     Add pay types from the finance setup page before assigning coach pay.
                   </span>
                 )}
                 {sortedPayTypes.map((payType) => {
-                  const categoryName =
-                    payCategories.data.find((category) => category.id === payType.categoryId)?.name ??
-                    "Uncategorized";
-                  const isChecked = selectedCoachId
-                    ? draft.payTypeIds.includes(payType.id)
-                    : payType.defaulted || draft.payTypeIds.includes(payType.id);
+                  const isChecked = draft.payTypeIds.includes(payType.id);
 
                   return (
                     <label
@@ -400,7 +399,6 @@ export default function CoachManagerClient() {
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        disabled={!selectedCoachId}
                         onChange={(event) =>
                           setDraft((current) => ({
                             ...current,
@@ -411,7 +409,7 @@ export default function CoachManagerClient() {
                         }
                       />
                       <span>
-                        {categoryName} · {payType.description} · ${payType.value}
+                        {payType.description} · ${payType.value}
                         {" · "}
                         {formatPayEventType(payType.eventType)}
                         {payType.defaulted ? " · default" : ""}
@@ -505,7 +503,7 @@ export default function CoachManagerClient() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? "Saving..." : selectedCoachId ? "Save Changes" : "Add Coach"}
               </button>
@@ -526,6 +524,7 @@ export default function CoachManagerClient() {
               </div>
             )}
           </form>
+          )}
         </SectionCard>
 
         <SectionCard title="Current Coaches" kicker="Staff Records">

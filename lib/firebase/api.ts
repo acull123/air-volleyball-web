@@ -1,5 +1,6 @@
 import {
   addDoc,
+  arrayUnion,
   deleteDoc,
   getDoc,
   getDocs,
@@ -150,6 +151,8 @@ export const firestoreApi = {
       (await listDocuments("events", [orderBy("startDate")])).filter((event) =>
         event.teamSchedules.some((entry) => entry.teamId === teamId),
       ),
+    markExpenseTriggered: (eventId: string, userId: string) =>
+      updateDocument("events", eventId, { expenseTriggered: arrayUnion(userId) as unknown as string[] }),
   },
   schedules: {
     ...buildCollectionStore("schedules"),
@@ -188,13 +191,8 @@ export const firestoreApi = {
     listByStatus: (status: FirestoreCollections["expenseReports"]["status"]) =>
       listDocuments("expenseReports", [where("status", "==", status), orderBy("createdAt", "desc")]),
   },
-  payCategories: {
-    ...buildCollectionStore("payCategories"),
-  },
   payTypes: {
     ...buildCollectionStore("payTypes"),
-    listByCategory: (categoryId: string) =>
-      listDocuments("payTypes", [where("categoryId", "==", categoryId)]),
   },
   conflicts: {
     ...buildCollectionStore("conflicts"),

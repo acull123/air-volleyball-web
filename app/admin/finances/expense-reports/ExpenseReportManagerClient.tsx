@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Timestamp, where, type QueryConstraint } from "firebase/firestore";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { useAuthSession } from "@/lib/firebase/auth";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
-import type { ExpenseReportDocument } from "@/lib/firebase/schema";
+import type { CoachDocument, EventDocument, ExpenseReportDocument, PayTypeDocument } from "@/lib/firebase/schema";
 import { uploadExpenseReceipt } from "@/lib/firebase/storage";
 import { toExternalHref } from "@/lib/url";
 
@@ -18,6 +18,12 @@ type ExpenseDraft = {
 };
 
 type ExpenseStatusFilter = ExpenseReportDocument["status"] | "all";
+
+type SuggestedExpense = {
+  id: string;
+  event: EventDocument;
+  payType: PayTypeDocument;
+};
 
 const emptyDraft: ExpenseDraft = {
   title: "",
@@ -74,6 +80,42 @@ function statusClassName(status: ExpenseReportDocument["status"]) {
   return "bg-amber-50 text-amber-800";
 }
 
+function getCoachTeamIds(coach: CoachDocument): string[] {
+  if (Array.isArray((coach as CoachDocument & { teamIds?: string[] }).teamIds)) {
+    return (coach as CoachDocument & { teamIds?: string[] }).teamIds.filter(Boolean);
+  }
+
+  const legacyTeamId = (coach as CoachDocument & { teamId?: string }).teamId;
+
+  return legacyTeamId ? [legacyTeamId] : [];
+}
+
+function getCoachPayTypeIds(coach: CoachDocument): string[] {
+  return Array.isArray(coach.payTypeIds) ? coach.payTypeIds.filter(Boolean) : [];
+}
+
+function getEventTriggeredUserIds(event: EventDocument): string[] {
+  const value = (event as EventDocument & { expenseTriggered?: string[] }).expenseTriggered;
+
+  return Array.isArray(value) ? value.filter(Boolean) : [];
+}
+
+function getEventEndDate(event: EventDocument) {
+  return event.endDate || event.startDate;
+}
+
+function isPastEvent(event: EventDocument) {
+  const endDate = getEventEndDate(event);
+
+  if (!endDate) {
+    return false;
+  }
+
+  const end = new Date(`${endDate}T23:59:59`);
+
+  return !Number.isNaN(end.getTime()) && end.getTime() < Date.now();
+}
+
 export default function ExpenseReportManagerClient() {
   const access = useAuthSession();
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
@@ -92,6 +134,15 @@ export default function ExpenseReportManagerClient() {
     enabled: isAdmin || Boolean(uid),
     constraints: expenseReportConstraints,
   });
+  const events = useFirestoreCollection("events", {
+    enabled: isCoach || isAdmin,
+  });
+  const coaches = useFirestoreCollection("coaches", {
+    enabled: isCoach || isAdmin,
+  });
+  const payTypes = useFirestoreCollection("payTypes", {
+    enabled: isCoach || isAdmin,
+  });
   const [draft, setDraft] = useState<ExpenseDraft>(emptyDraft);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptFileName, setReceiptFileName] = useState("");
@@ -102,6 +153,11 @@ export default function ExpenseReportManagerClient() {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [statusFilter, setStatusFilter] = useState<ExpenseStatusFilter>("all");
   const [coachFilter, setCoachFilter] = useState("all");
+  const [submittedSuggestedExpenseIds, setSubmittedSuggestedExpenseIds] = useState<string[]>([]);
+  const [skippedSuggestedExpenseIds, setSkippedSuggestedExpenseIds] = useState<string[]>([]);
+  const [suggestedExpenseQueue, setSuggestedExpenseQueue] = useState<SuggestedExpense[]>([]);
+  const [suggestedExpenseSubmittingId, setSuggestedExpenseSubmittingId] = useState<string | null>(null);
+  const [skippingSuggestedExpenses, setSkippingSuggestedExpenses] = useState(false);
 
   const sortedExpenseReports = useMemo(
     () =>
@@ -162,6 +218,98 @@ export default function ExpenseReportManagerClient() {
     coachFilter === "all"
       ? ""
       : coachFilterOptions.find(([coachUserId]) => coachUserId === coachFilter)?.[1] ?? "selected coach";
+  const signedInEmail = (
+    access.authUser?.profile?.email ||
+    access.authUser?.firebaseUser.email ||
+    ""
+  ).trim().toLowerCase();
+  const currentCoach = useMemo(() => {
+    const profileCoachId = access.authUser?.profile?.coachId ?? "";
+
+    if (profileCoachId) {
+      return coaches.data.find((coach) => coach.id === profileCoachId) ?? null;
+    }
+
+    if (!signedInEmail) {
+      return null;
+    }
+
+    return (
+      coaches.data.find((coach) => coach.email.trim().toLowerCase() === signedInEmail) ?? null
+    );
+  }, [access.authUser?.profile?.coachId, coaches.data, signedInEmail]);
+  const availableSuggestedExpenses = useMemo<SuggestedExpense[]>(() => {
+    if (!uid || !currentCoach) {
+      return [];
+    }
+
+    const coachTeamIds = new Set(getCoachTeamIds(currentCoach));
+    const coachPayTypeIds = new Set(getCoachPayTypeIds(currentCoach));
+    const assignedPayTypes = payTypes.data.filter((payType) => coachPayTypeIds.has(payType.id));
+    const completedSuggestedExpenseIds = new Set([
+      ...submittedSuggestedExpenseIds,
+      ...skippedSuggestedExpenseIds,
+    ]);
+
+    if (coachTeamIds.size === 0 || assignedPayTypes.length === 0) {
+      return [];
+    }
+
+    return events.data
+      .filter((event) => {
+        const eventTeamIds = event.teamSchedules.map((entry) => entry.teamId).filter(Boolean);
+        const alreadyTriggered = getEventTriggeredUserIds(event).includes(uid);
+
+        return (
+          event.active &&
+          isPastEvent(event) &&
+          !alreadyTriggered &&
+          eventTeamIds.some((teamId) => coachTeamIds.has(teamId))
+        );
+      })
+      .flatMap((event) =>
+        assignedPayTypes
+          .filter((payType) => payType.eventType === event.type)
+          .map((payType) => ({
+            id: `${event.id}:${payType.id}`,
+            event,
+            payType,
+          })),
+      )
+      .filter((suggestion) => !completedSuggestedExpenseIds.has(suggestion.id))
+      .sort((left, right) =>
+        `${left.event.startDate} ${left.event.title} ${left.payType.description}`.localeCompare(
+          `${right.event.startDate} ${right.event.title} ${right.payType.description}`,
+        ),
+      );
+  }, [
+    currentCoach,
+    events.data,
+    payTypes.data,
+    skippedSuggestedExpenseIds,
+    submittedSuggestedExpenseIds,
+    uid,
+  ]);
+  const completedSuggestedExpenseIds = useMemo(
+    () => new Set([...submittedSuggestedExpenseIds, ...skippedSuggestedExpenseIds]),
+    [skippedSuggestedExpenseIds, submittedSuggestedExpenseIds],
+  );
+  const suggestedExpenses = useMemo(
+    () => suggestedExpenseQueue.filter((suggestion) => !completedSuggestedExpenseIds.has(suggestion.id)),
+    [completedSuggestedExpenseIds, suggestedExpenseQueue],
+  );
+  const showSuggestedExpenseDialog = suggestedExpenses.length > 0;
+
+  useEffect(() => {
+    if (suggestedExpenseQueue.length === 0 && availableSuggestedExpenses.length > 0) {
+      queueMicrotask(() => setSuggestedExpenseQueue(availableSuggestedExpenses));
+      return;
+    }
+
+    if (suggestedExpenseQueue.length > 0 && suggestedExpenses.length === 0) {
+      queueMicrotask(() => setSuggestedExpenseQueue([]));
+    }
+  }, [availableSuggestedExpenses, suggestedExpenseQueue.length, suggestedExpenses.length]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -238,6 +386,78 @@ export default function ExpenseReportManagerClient() {
       setError(submitError instanceof Error ? submitError.message : "Unable to submit expense report.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function submitSuggestedExpense(suggestion: SuggestedExpense) {
+    if (!access.authUser?.firebaseUser.uid || !access.authUser.profile) {
+      setError("You must be signed in to submit an expense report.");
+      return;
+    }
+
+    setSuggestedExpenseSubmittingId(suggestion.id);
+    setStatus(null);
+    setError(null);
+
+    try {
+      await firestoreApi.expenseReports.create({
+        coachUserId: access.authUser.firebaseUser.uid,
+        coachName: `${access.authUser.profile.firstName} ${access.authUser.profile.lastName}`.trim(),
+        coachEmail: access.authUser.profile.email || access.authUser.firebaseUser.email || "",
+        title: `${suggestion.event.title} - ${suggestion.payType.description}`,
+        amount: suggestion.payType.value,
+        expenseDate: getEventEndDate(suggestion.event) || suggestion.event.startDate,
+        notes: [
+          `Auto-created from ${suggestion.event.title}.`,
+          `Pay type: ${suggestion.payType.description}.`,
+        ].join("\n"),
+        receiptUrl: "",
+        receiptFileName: "",
+        status: "pending",
+        reviewedAt: null,
+        reviewedBy: "",
+        paidAt: null,
+        paidBy: "",
+      });
+
+      await firestoreApi.events.markExpenseTriggered(suggestion.event.id, access.authUser.firebaseUser.uid);
+      setSubmittedSuggestedExpenseIds((current) => [...new Set([...current, suggestion.id])]);
+      setStatus("Suggested expense report submitted.");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to submit suggested expense report.");
+    } finally {
+      setSuggestedExpenseSubmittingId(null);
+    }
+  }
+
+  async function skipSuggestedExpenses() {
+    if (!access.authUser?.firebaseUser.uid) {
+      setError("You must be signed in to skip suggested expense reports.");
+      return;
+    }
+
+    const visibleSuggestions = suggestedExpenses;
+
+    setSkippingSuggestedExpenses(true);
+    setStatus(null);
+    setError(null);
+
+    try {
+      const eventIds = [...new Set(visibleSuggestions.map((suggestion) => suggestion.event.id))];
+
+      await Promise.all(
+        eventIds.map((eventId) =>
+          firestoreApi.events.markExpenseTriggered(eventId, access.authUser!.firebaseUser.uid),
+        ),
+      );
+      setSkippedSuggestedExpenseIds((current) => [
+        ...new Set([...current, ...visibleSuggestions.map((suggestion) => suggestion.id)]),
+      ]);
+      setStatus("Suggested expense reports skipped.");
+    } catch (skipError) {
+      setError(skipError instanceof Error ? skipError.message : "Unable to skip suggested expense reports.");
+    } finally {
+      setSkippingSuggestedExpenses(false);
     }
   }
 
@@ -329,6 +549,67 @@ export default function ExpenseReportManagerClient() {
       />
 
       <div className="grid gap-8 lg:grid-cols-[0.9fr_1.1fr]">
+        {showSuggestedExpenseDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0b1f33]/60 px-4 py-8">
+            <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-[1.5rem] bg-white p-6 shadow-2xl">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                    Suggested Expenses
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold text-[color:var(--ink)]">
+                    Expense reports ready to submit
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+                    These are past team events that match your assigned coach pay types.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={skippingSuggestedExpenses || suggestedExpenseSubmittingId !== null}
+                  onClick={() => void skipSuggestedExpenses()}
+                  className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {skippingSuggestedExpenses ? "Skipping..." : "Skip these expense reports"}
+                </button>
+              </div>
+              <div className="mt-5 space-y-3">
+                {suggestedExpenses.map((suggestion) => (
+                  <div
+                    key={suggestion.id}
+                    className="group rounded-2xl border border-[color:var(--line)] bg-white px-4 py-4 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="font-bold text-[color:var(--ink)] group-hover:text-white">
+                          {suggestion.event.title}
+                        </p>
+                        <div className="mt-2 space-y-1 text-sm text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                          <p>{formatDate(getEventEndDate(suggestion.event))}</p>
+                          <p>{suggestion.payType.description}</p>
+                          <p className="font-semibold text-[color:var(--ink)] group-hover:text-white">
+                            {formatMoney(suggestion.payType.value)}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={
+                          suggestedExpenseSubmittingId !== null || skippingSuggestedExpenses
+                        }
+                        onClick={() => void submitSuggestedExpense(suggestion)}
+                        className="w-fit rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] group-hover:bg-white/10 group-hover:ring-1 group-hover:ring-white/30 group-hover:hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {suggestedExpenseSubmittingId === suggestion.id ? "Submitting..." : "Submit"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {(isCoach || isAdmin) && (
           <SectionCard title="Submit Expense Report" kicker="Coach Entry">
             <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>

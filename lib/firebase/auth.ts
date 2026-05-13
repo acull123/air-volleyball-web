@@ -36,7 +36,7 @@ export async function createPortalAccount(params: {
   firstName: string;
   lastName: string;
   phone?: string;
-  role: "parent" | "player";
+  role: "parent" | "player" | "unverifiedCoach";
   playerIds: string[];
 }) {
   const credential = await createUserWithEmailAndPassword(
@@ -103,6 +103,8 @@ export async function upsertUserProfile(params: {
   phone?: string;
   role: UserRole;
   playerIds?: string[];
+  coachId?: string;
+  active?: boolean;
 }) {
   const db = requireDb();
   const ref = doc(db, "users", params.uid);
@@ -118,6 +120,8 @@ export async function upsertUserProfile(params: {
       phone: params.phone ?? "",
       role: params.role,
       playerIds: params.playerIds ?? [],
+      coachId: params.coachId ?? "",
+      active: params.active ?? true,
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
     },
@@ -151,11 +155,11 @@ export async function updateUserProfileFields(params: {
 }
 
 export function isRole(profile: UserDocument | null, role: UserRole) {
-  return profile?.role === role;
+  return profile?.active !== false && profile?.role === role;
 }
 
 export function hasAnyRole(profile: UserDocument | null, roles: UserRole[]) {
-  return profile ? roles.includes(profile.role) : false;
+  return profile && profile.active !== false ? roles.includes(profile.role) : false;
 }
 
 export function useAuthSession() {
