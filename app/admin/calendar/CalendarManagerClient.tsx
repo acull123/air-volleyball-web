@@ -4,11 +4,14 @@ import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import ClubCalendar from "@/app/components/ClubCalendar";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { useAuthSession } from "@/lib/firebase/auth";
 
 export default function CalendarManagerClient() {
+  const access = useAuthSession();
   const events = useFirestoreCollection("events");
   const teams = useFirestoreCollection("teams");
   const conflicts = useFirestoreCollection("conflicts");
+  const isAdmin = access.authUser?.profile?.role === "admin";
 
   function getEndTime(startTime: string, durationMinutes: number) {
     const [rawHour, rawMinute = "00"] = startTime.split(":");
@@ -70,9 +73,10 @@ export default function CalendarManagerClient() {
           teams={teams.data}
           conflicts={conflicts.data}
           loading={loading}
-          onEventTimeSave={updateEventTime}
-          onEventDateSave={updateEventDate}
-          onEventDelete={deleteEvent}
+          readOnly={!isAdmin}
+          onEventTimeSave={isAdmin ? updateEventTime : undefined}
+          onEventDateSave={isAdmin ? updateEventDate : undefined}
+          onEventDelete={isAdmin ? deleteEvent : undefined}
         />
       )}
     </>

@@ -9,6 +9,7 @@ import type {
   TeamDocument,
 } from "@/lib/firebase/schema";
 import { getEventTeamSchedules } from "@/lib/event-teams";
+import { useAuthSession } from "@/lib/firebase/auth";
 
 type ClubCalendarProps = {
   events: EventDocument[];
@@ -22,6 +23,8 @@ type ClubCalendarProps = {
   onEventDuplicate?: (event: EventDocument, startDate: string, startTime: string) => Promise<void>;
   onMonthDayClick?: (dateKey: string) => void;
   monthOnly?: boolean;
+  showFilters?: boolean;
+  readOnly?: boolean;
 };
 
 type CalendarEventEntry = {
@@ -205,6 +208,11 @@ function formatDayTitle(date: Date) {
   });
 }
 
+function formatDateKey(dateKey: string) {
+  const date = parseDateKey(dateKey);
+  return date ? formatDayTitle(date) : dateKey || "Date TBD";
+}
+
 function formatTime(time: string) {
   if (!time) {
     return "Time TBD";
@@ -277,6 +285,16 @@ function formatEventTimeRange(event: EventDocument, startTime: string) {
   }
 
   return formatTime(startTime);
+}
+
+function formatEventSubtitle(event: EventDocument, startTime: string, teamLabel: string) {
+  return [
+    formatEventTimeRange(event, startTime),
+    event.type === "practice" && event.courtNumber ? `Court ${event.courtNumber}` : "",
+    teamLabel,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function minutesToTime(minutes: number) {
@@ -432,7 +450,11 @@ export default function ClubCalendar({
   onEventDuplicate,
   onMonthDayClick,
   monthOnly = false,
+  showFilters = true,
+  readOnly = false,
 }: ClubCalendarProps) {
+  const access = useAuthSession();
+  const canEditEvents = !readOnly && access.authUser?.profile?.role === "admin";
   const today = useMemo(() => new Date(), []);
   const todayKey = toDateKey(today);
   const [visibleMonth, setVisibleMonth] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -599,7 +621,7 @@ export default function ClubCalendar({
           kind: "event" as const,
           id: entry.id,
           title: entry.event.title,
-          subtitle: `${formatEventTimeRange(entry.event, displayTime)} · ${entry.teamLabel}`,
+          subtitle: formatEventSubtitle(entry.event, displayTime, entry.teamLabel),
           startMinutes,
           endMinutes: getEventEndMinutes(entry.event, startMinutes),
           colorClass: eventTypeDayClasses[entry.event.type],
@@ -636,7 +658,7 @@ export default function ClubCalendar({
   const timedDayLayoutItems = useMemo(() => layoutTimedItems(timedDayItems), [timedDayItems]);
 
   useEffect(() => {
-    if (!draggingEventId) {
+    if (!draggingEventId || !canEditEvents || !onEventTimeSave) {
       return;
     }
 
@@ -681,7 +703,7 @@ export default function ClubCalendar({
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
     };
-  }, [draggingEventId]);
+  }, [canEditEvents, draggingEventId, onEventTimeSave]);
 
   function toggleEventTypes(types: EventDocument["type"][], checked: boolean) {
     setEnabledEventTypes((current) => {
@@ -757,7 +779,7 @@ export default function ClubCalendar({
   }
 
   async function saveDuplicateEvent(keepOpen: boolean) {
-    if (!duplicateSourceEvent || !onEventDuplicate) {
+    if (!duplicateSourceEvent || !canEditEvents || !onEventDuplicate) {
       setDuplicateSourceEventId(null);
       return;
     }
@@ -792,6 +814,11 @@ export default function ClubCalendar({
 
   async function saveEventDetails() {
     if (!selectedEvent) {
+      setSelectedEventId(null);
+      return;
+    }
+
+    if (!canEditEvents) {
       setSelectedEventId(null);
       return;
     }
@@ -843,7 +870,7 @@ export default function ClubCalendar({
   }
 
   async function deleteSelectedEvent() {
-    if (!selectedEvent || !onEventDelete) {
+    if (!selectedEvent || !canEditEvents || !onEventDelete) {
       return;
     }
 
@@ -874,7 +901,7 @@ export default function ClubCalendar({
   }
 
   async function savePendingDayChanges() {
-    if (!onEventTimeSave || pendingDayChanges.length === 0) {
+    if (!canEditEvents || !onEventTimeSave || pendingDayChanges.length === 0) {
       return;
     }
 
@@ -902,7 +929,7 @@ export default function ClubCalendar({
   }
 
   async function movePracticeToDay(event: EventDocument, dateKey: string) {
-    if (!onEventDateSave || event.type !== "practice" || event.startDate === dateKey) {
+    if (!canEditEvents || !onEventDateSave || event.type !== "practice" || event.startDate === dateKey) {
       return;
     }
 
@@ -948,81 +975,83 @@ export default function ClubCalendar({
 
   return (
     <div className="space-y-6">
-      <div className="rounded-[1.25rem] border border-[color:var(--line)] bg-white shadow-[0_12px_30px_rgba(18,38,63,0.05)]">
-        <button
-          type="button"
-          aria-expanded={filtersOpen}
-          onClick={() => setFiltersOpen((current) => !current)}
-          className="flex w-full flex-col gap-2 px-4 py-4 text-left transition hover:bg-[#f3f8ff] sm:flex-row sm:items-center sm:justify-between"
-        >
-          <span>
-            <span className="block text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
-              Filters
+      {showFilters && (
+        <div className="rounded-[1.25rem] border border-[color:var(--line)] bg-white shadow-[0_12px_30px_rgba(18,38,63,0.05)]">
+          <button
+            type="button"
+            aria-expanded={filtersOpen}
+            onClick={() => setFiltersOpen((current) => !current)}
+            className="flex w-full flex-col gap-2 px-4 py-4 text-left transition hover:bg-[#f3f8ff] sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span>
+              <span className="block text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                Filters
+              </span>
+              <span className="mt-1 block text-sm font-semibold text-[color:var(--ink)]">
+                {visibleTeamCount} of {teamOptions.length} teams visible
+                {showConflicts ? " · conflicts shown" : " · conflicts hidden"}
+              </span>
             </span>
-            <span className="mt-1 block text-sm font-semibold text-[color:var(--ink)]">
-              {visibleTeamCount} of {teamOptions.length} teams visible
-              {showConflicts ? " · conflicts shown" : " · conflicts hidden"}
+            <span className="inline-flex w-fit rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-bold text-[#1d4f91]">
+              {filtersOpen ? "Hide filters" : "Show filters"}
             </span>
-          </span>
-          <span className="inline-flex w-fit rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-bold text-[#1d4f91]">
-            {filtersOpen ? "Hide filters" : "Show filters"}
-          </span>
-        </button>
+          </button>
 
-        {filtersOpen && (
-          <div className="grid gap-5 border-t border-[color:var(--line)] px-4 py-4 md:grid-cols-[minmax(14rem,18rem)_1fr]">
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-[color:var(--ink)]">Event types</p>
-              {eventTypeFilterOptions.map((option) => {
-                const checked = option.types.every((type) => enabledEventTypes.has(type));
-                const swatchType = option.types[0];
+          {filtersOpen && (
+            <div className="grid gap-5 border-t border-[color:var(--line)] px-4 py-4 md:grid-cols-[minmax(14rem,18rem)_1fr]">
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-[color:var(--ink)]">Event types</p>
+                {eventTypeFilterOptions.map((option) => {
+                  const checked = option.types.every((type) => enabledEventTypes.has(type));
+                  const swatchType = option.types[0];
 
-                return (
-                  <label key={option.label} className="flex items-center gap-3 text-sm text-[color:var(--ink)]">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => toggleEventTypes(option.types, event.target.checked)}
-                    />
-                    <span className={`h-3 w-3 rounded-full ${eventTypeClasses[swatchType]}`} />
-                    <span>{option.label}</span>
-                  </label>
-                );
-              })}
-              <label className="flex items-center gap-3 text-sm text-[color:var(--ink)]">
-                <input
-                  type="checkbox"
-                  checked={showConflicts}
-                  onChange={(event) => setShowConflicts(event.target.checked)}
-                />
-                <span className="h-3 w-3 rounded-full bg-[#dc2626]" />
-                <span>Conflicts</span>
-              </label>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-sm font-bold text-[color:var(--ink)]">Teams</p>
-              <div className="grid max-h-56 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {teamOptions.length === 0 ? (
-                  <p className="text-sm text-[color:var(--muted)]">No teams yet.</p>
-                ) : (
-                  teamOptions.map((team) => (
-                    <label key={team.id} className="flex items-start gap-3 text-sm text-[color:var(--ink)]">
+                  return (
+                    <label key={option.label} className="flex items-center gap-3 text-sm text-[color:var(--ink)]">
                       <input
                         type="checkbox"
-                        checked={selectedTeamIds.has(team.id)}
-                        onChange={(changeEvent) => toggleTeamVisibility(team.id, changeEvent.target.checked)}
-                        className="mt-1"
+                        checked={checked}
+                        onChange={(event) => toggleEventTypes(option.types, event.target.checked)}
                       />
-                      <span className="font-semibold">{team.name}</span>
+                      <span className={`h-3 w-3 rounded-full ${eventTypeClasses[swatchType]}`} />
+                      <span>{option.label}</span>
                     </label>
-                  ))
-                )}
+                  );
+                })}
+                <label className="flex items-center gap-3 text-sm text-[color:var(--ink)]">
+                  <input
+                    type="checkbox"
+                    checked={showConflicts}
+                    onChange={(event) => setShowConflicts(event.target.checked)}
+                  />
+                  <span className="h-3 w-3 rounded-full bg-[#dc2626]" />
+                  <span>Conflicts</span>
+                </label>
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-bold text-[color:var(--ink)]">Teams</p>
+                <div className="grid max-h-56 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {teamOptions.length === 0 ? (
+                    <p className="text-sm text-[color:var(--muted)]">No teams yet.</p>
+                  ) : (
+                    teamOptions.map((team) => (
+                      <label key={team.id} className="flex items-start gap-3 text-sm text-[color:var(--ink)]">
+                        <input
+                          type="checkbox"
+                          checked={selectedTeamIds.has(team.id)}
+                          onChange={(changeEvent) => toggleTeamVisibility(team.id, changeEvent.target.checked)}
+                          className="mt-1"
+                        />
+                        <span className="font-semibold">{team.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <section className="rounded-[1.25rem] border border-[color:var(--line)] bg-white p-3 shadow-[0_14px_35px_rgba(18,38,63,0.06)] md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1131,7 +1160,7 @@ export default function ClubCalendar({
                         tabIndex={0}
                         onClick={() => handleMonthDayClick(dateKey)}
                         onDragOver={(event) => {
-                          if (draggingPracticeId && onEventDateSave) {
+                          if (draggingPracticeId && canEditEvents && onEventDateSave) {
                             event.preventDefault();
                           }
                         }}
@@ -1175,9 +1204,9 @@ export default function ClubCalendar({
                             <button
                               key={entry.id}
                               type="button"
-                              draggable={entry.event.type === "practice" && Boolean(onEventDateSave)}
+                              draggable={canEditEvents && entry.event.type === "practice" && Boolean(onEventDateSave)}
                               onDragStart={(event) => {
-                                if (entry.event.type !== "practice") {
+                                if (!canEditEvents || entry.event.type !== "practice") {
                                   return;
                                 }
 
@@ -1196,12 +1225,14 @@ export default function ClubCalendar({
                                 openEventDialog(entry.event, dateKey);
                               }}
                               className={`w-full rounded-md px-2 py-1 text-left text-[0.68rem] font-semibold leading-4 shadow-sm transition hover:brightness-95 md:text-xs ${
-                                entry.event.type === "practice" && onEventDateSave ? "cursor-grab active:cursor-grabbing" : ""
+                                canEditEvents && entry.event.type === "practice" && onEventDateSave
+                                  ? "cursor-grab active:cursor-grabbing"
+                                  : ""
                               } ${eventTypeClasses[entry.event.type]}`}
                             >
                               <span className="block truncate">{entry.event.title}</span>
                               <span className="block truncate opacity-85">
-                                {formatEventTimeRange(entry.event, entry.event.startTime)} · {entry.teamLabel}
+                                {formatEventSubtitle(entry.event, entry.event.startTime, entry.teamLabel)}
                               </span>
                               {entry.event.type === "practice" && entry.event.practicePublished === false && (
                                 <span className="mt-1 inline-flex rounded-full bg-white/70 px-2 py-0.5 text-[0.62rem] font-bold text-[#1d4f91]">
@@ -1268,7 +1299,7 @@ export default function ClubCalendar({
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {pendingDayChanges.length > 0 && (
+                  {canEditEvents && pendingDayChanges.length > 0 && (
                     <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#d7e6fb] bg-[#f3f8ff] px-3 py-2">
                       <span className="text-xs font-bold text-[#1d4f91]">
                         {pendingDayChanges.length} unsaved time change
@@ -1382,6 +1413,10 @@ export default function ClubCalendar({
                           key={item.id}
                           type="button"
                           onPointerDown={(event) => {
+                            if (!canEditEvents || !onEventTimeSave) {
+                              return;
+                            }
+
                             event.stopPropagation();
                             dragMovedRef.current = false;
                             setStatus(null);
@@ -1403,7 +1438,11 @@ export default function ClubCalendar({
 
                             openEventDialog(item.event, selectedDayKey);
                           }}
-                          className={`absolute touch-none cursor-grab rounded-xl border-l-4 px-3 py-2 text-left text-xs font-semibold shadow-sm transition hover:brightness-95 active:cursor-grabbing ${
+                          className={`absolute rounded-xl border-l-4 px-3 py-2 text-left text-xs font-semibold shadow-sm transition hover:brightness-95 ${
+                            canEditEvents && onEventTimeSave
+                              ? "touch-none cursor-grab active:cursor-grabbing"
+                              : "cursor-pointer"
+                          } ${
                             hasPendingTime ? "ring-2 ring-[#1d67cd]/30" : ""
                           } ${item.colorClass}`}
                           style={{
@@ -1499,67 +1538,92 @@ export default function ClubCalendar({
                 <span className="font-semibold text-[color:var(--ink)]">Teams:</span>{" "}
                 {getTeamLabel(getEventTeamSchedules(selectedEvent), teams)}
               </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="flex flex-col gap-2 font-semibold text-[color:var(--ink)]">
-                  Start date
-                  <input
-                    type="date"
-                    value={startDateDraft}
-                    onChange={(event) => {
-                      setStartDateDraft(event.target.value);
-                      if (!endDateDraft || endDateDraft < event.target.value) {
-                        setEndDateDraft(event.target.value);
-                      }
-                    }}
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 font-semibold text-[color:var(--ink)]">
-                  End date
-                  <input
-                    type="date"
-                    value={endDateDraft}
-                    min={startDateDraft}
-                    onChange={(event) => setEndDateDraft(event.target.value)}
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  />
-                </label>
-              </div>
-              <label className="flex flex-col gap-2 font-semibold text-[color:var(--ink)]">
-                Event time
-                <input
-                  type="time"
-                  value={timeDraft}
-                  onChange={(event) => setTimeDraft(event.target.value)}
-                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                />
-              </label>
+              {!canEditEvents ? (
+                <>
+                  <p>
+                    <span className="font-semibold text-[color:var(--ink)]">Date:</span>{" "}
+                    {formatDateKey(selectedEvent.startDate)}
+                    {selectedEvent.endDate && selectedEvent.endDate !== selectedEvent.startDate
+                      ? ` through ${formatDateKey(selectedEvent.endDate)}`
+                      : ""}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[color:var(--ink)]">Time:</span>{" "}
+                    {formatEventTimeRange(selectedEvent, selectedEvent.startTime)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-2 font-semibold text-[color:var(--ink)]">
+                      Start date
+                      <input
+                        type="date"
+                        value={startDateDraft}
+                        onChange={(event) => {
+                          setStartDateDraft(event.target.value);
+                          if (!endDateDraft || endDateDraft < event.target.value) {
+                            setEndDateDraft(event.target.value);
+                          }
+                        }}
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 font-semibold text-[color:var(--ink)]">
+                      End date
+                      <input
+                        type="date"
+                        value={endDateDraft}
+                        min={startDateDraft}
+                        onChange={(event) => setEndDateDraft(event.target.value)}
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                  </div>
+                  <label className="flex flex-col gap-2 font-semibold text-[color:var(--ink)]">
+                    Event time
+                    <input
+                      type="time"
+                      value={timeDraft}
+                      onChange={(event) => setTimeDraft(event.target.value)}
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    />
+                  </label>
+                </>
+              )}
               {selectedEvent.location && (
                 <p>
                   <span className="font-semibold text-[color:var(--ink)]">Location:</span> {selectedEvent.location}
+                </p>
+              )}
+              {selectedEvent.type === "practice" && selectedEvent.courtNumber && (
+                <p>
+                  <span className="font-semibold text-[color:var(--ink)]">Court:</span> {selectedEvent.courtNumber}
                 </p>
               )}
               {selectedEvent.notes && <p className="leading-7">{selectedEvent.notes}</p>}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-3">
-              <button
-                type="button"
-                disabled={savingTime}
-                onClick={() => void saveEventDetails()}
-                className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingTime ? "Saving..." : "Save Event"}
-              </button>
+              {canEditEvents && (
+                <button
+                  type="button"
+                  disabled={savingTime}
+                  onClick={() => void saveEventDetails()}
+                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingTime ? "Saving..." : "Save Event"}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={savingTime}
                 onClick={() => setSelectedEventId(null)}
                 className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Cancel
+                {canEditEvents ? "Cancel" : "Close"}
               </button>
-              {onEventDelete && (
+              {canEditEvents && onEventDelete && (
                 <button
                   type="button"
                   disabled={savingTime}
@@ -1569,7 +1633,7 @@ export default function ClubCalendar({
                   Delete Event
                 </button>
               )}
-              {onEventDuplicate && selectedEvent.type === "practice" && (
+              {canEditEvents && onEventDuplicate && selectedEvent.type === "practice" && (
                 <button
                   type="button"
                   disabled={savingTime}

@@ -29,6 +29,12 @@ const testimonials = [
   "Parents also point to strong coaching and quality tournament experiences as reasons they would recommend the club to others in Eau Claire and the surrounding area.",
 ];
 
+function getGraduationYearFromBirthDate(birthDate: string) {
+  const birthYear = Number(birthDate.split("-")[0]);
+
+  return Number.isNaN(birthYear) ? null : birthYear + 18;
+}
+
 const recruitingSections = [
   {
     title: "Prepping for the process",
@@ -351,22 +357,31 @@ export default function AboutPage() {
           </div>
         ) : (
           <div className="grid gap-5 lg:grid-cols-3">
-            {alumniPlayers.map((player) => (
-              <div
-                key={player.id}
-                className="rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5"
-              >
-                <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                  {player.school || "Alumni"}
-                </p>
-                <p className="mt-2 text-2xl font-bold text-[color:var(--ink)]">
-                  {player.firstName} {player.lastName}
-                </p>
-                <p className="mt-3 text-sm leading-7 text-[color:var(--muted)]">
-                  {[player.college, player.position].filter(Boolean).join(" · ") || "College details coming soon"}
-                </p>
-              </div>
-            ))}
+            {alumniPlayers.map((player) => {
+              const graduationYear = getGraduationYearFromBirthDate(player.birthDate);
+
+              return (
+                <div
+                  key={player.id}
+                  className="rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5"
+                >
+                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">
+                    {player.school || "Alumni"}
+                  </p>
+                  <p className="mt-2 text-2xl font-bold text-[color:var(--ink)]">
+                    {player.firstName} {player.lastName}
+                  </p>
+                  <p className="mt-3 text-sm leading-7 text-[color:var(--muted)]">
+                    {[player.college, player.position].filter(Boolean).join(" · ") || "College details coming soon"}
+                  </p>
+                  {graduationYear && (
+                    <p className="mt-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Year: {graduationYear}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </SectionCard>

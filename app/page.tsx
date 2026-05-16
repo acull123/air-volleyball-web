@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import FavoritePreferenceDialog from "./components/FavoritePreferenceDialog";
 import EventCard from "./components/EventCard";
@@ -62,6 +63,10 @@ function buildEventCardItem(event: EventDocument): Event {
     href: getEventHref(event),
     status: getEventStatus(event),
   };
+}
+
+function isPubliclyVisibleEvent(event: EventDocument) {
+  return event.active !== false && (event.type !== "practice" || event.practicePublished !== false);
 }
 
 function getCookie(name: string) {
@@ -233,7 +238,7 @@ export default function HomePage() {
 
   const upcomingEvents = useMemo<Event[]>(() => {
     return [...events.data]
-      .filter((event) => event.active !== false)
+      .filter(isPubliclyVisibleEvent)
       .filter(isCurrentOrFutureEvent)
       .filter((event) => event.type !== "areaCamp")
       .sort((a, b) => {
@@ -271,7 +276,7 @@ export default function HomePage() {
     ]);
 
     const recommendedEvents = events.data
-      .filter((event) => event.active !== false)
+      .filter(isPubliclyVisibleEvent)
       .filter(isCurrentOrFutureEvent)
       .filter((event) => event.type !== "areaCamp")
       .filter((event) => {
@@ -416,30 +421,39 @@ export default function HomePage() {
 
       <SectionCard title="Club Snapshot" kicker="Live Overview">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className={`rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5`}>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+          <Link
+            href="/teams"
+            className={`group rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]`}
+          >
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)] group-hover:text-white">
               Active Teams
             </p>
-            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)]">
+            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)] group-hover:text-white">
               {summary.teams}
             </p>
-          </div>
-          <div className={`rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5`}>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+          </Link>
+          <Link
+            href="/players"
+            className={`group rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]`}
+          >
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)] group-hover:text-white">
               Active Players
             </p>
-            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)]">
+            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)] group-hover:text-white">
               {summary.players}
             </p>
-          </div>
-          <div className={`rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5`}>
-            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+          </Link>
+          <Link
+            href="/coaches"
+            className={`group rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]`}
+          >
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)] group-hover:text-white">
               Active Coaches
             </p>
-            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)]">
+            <p className="mt-2 font-[family:var(--font-display)] text-5xl uppercase leading-none text-[color:var(--ink)] group-hover:text-white">
               {summary.coaches}
             </p>
-          </div>
+          </Link>
         </div>
       </SectionCard>
 

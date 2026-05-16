@@ -14,8 +14,6 @@ type TeamDraft = {
   name: string;
   season: string;
   ageGroup: string;
-  practicesPerWeek: string;
-  practiceDurationMinutes: string;
   expectedPlayersPerTeam: string;
   expectedTournamentCount: string;
   description: string;
@@ -28,8 +26,6 @@ const emptyDraft: TeamDraft = {
   name: "",
   season: "",
   ageGroup: "",
-  practicesPerWeek: "2",
-  practiceDurationMinutes: "120",
   expectedPlayersPerTeam: "",
   expectedTournamentCount: "",
   description: "",
@@ -43,8 +39,6 @@ function mapTeamToDraft(team: TeamDocument): TeamDraft {
     name: team.name,
     season: team.season,
     ageGroup: team.ageGroup,
-    practicesPerWeek: String(team.practicesPerWeek || 2),
-    practiceDurationMinutes: String(team.practiceDurationMinutes || 120),
     expectedPlayersPerTeam:
       team.expectedPlayersPerTeam === undefined || team.expectedPlayersPerTeam === null
         ? ""
@@ -213,8 +207,6 @@ export default function TeamManagerClient() {
         name: draft.name.trim(),
         season: draft.season.trim(),
         ageGroup: draft.ageGroup.trim(),
-        practicesPerWeek: Number(draft.practicesPerWeek),
-        practiceDurationMinutes: Number(draft.practiceDurationMinutes),
         expectedPlayersPerTeam: draft.expectedPlayersPerTeam.trim()
           ? Number(draft.expectedPlayersPerTeam)
           : 0,
@@ -234,8 +226,6 @@ export default function TeamManagerClient() {
       }
 
       if (
-        Number.isNaN(basePayload.practicesPerWeek) ||
-        Number.isNaN(basePayload.practiceDurationMinutes) ||
         Number.isNaN(basePayload.expectedPlayersPerTeam) ||
         Number.isNaN(basePayload.expectedTournamentCount)
       ) {
@@ -483,41 +473,6 @@ export default function TeamManagerClient() {
                     {ageGroup}
                   </option>
                 ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Practices per week <span className="text-[#b42318]">*</span>
-              </span>
-              <select
-                value={draft.practicesPerWeek}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, practicesPerWeek: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                {["1", "2", "3", "4"].map((count) => (
-                  <option key={count} value={count}>
-                    {count}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Practice length <span className="text-[#b42318]">*</span>
-              </span>
-              <select
-                value={draft.practiceDurationMinutes}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, practiceDurationMinutes: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="60">60 minutes</option>
-                <option value="90">90 minutes</option>
-                <option value="120">120 minutes</option>
-                <option value="150">150 minutes</option>
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">

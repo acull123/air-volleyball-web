@@ -6,7 +6,7 @@ import PageHero from "../components/PageHero";
 import ScheduleTable from "../components/ScheduleTable";
 import SectionCard from "../components/SectionCard";
 import { getEventStatus } from "@/lib/event-status";
-import { getEventTeamIds, getEventTeamScheduleUrl } from "@/lib/event-teams";
+import { getEventTeamIds } from "@/lib/event-teams";
 import { createPortalAccount, signInUser, useAuthSession } from "@/lib/firebase/auth";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import { compareAthletesByName, comparePlayersByName } from "@/lib/player-name";
@@ -200,6 +200,92 @@ function useRegistrationsByPlayerIds(playerIds: string[]) {
   };
 }
 
+function useConflictsByPlayerIds(playerIds: string[]) {
+  const [state, setState] = useState<{
+    key: string | null;
+    data: ConflictDocument[];
+    error: string | null;
+  }>({
+    key: null,
+    data: [],
+    error: null,
+  });
+
+  const normalizedPlayerIds = useMemo(
+    () => Array.from(new Set(playerIds.filter(Boolean))).sort(),
+    [playerIds],
+  );
+  const subscriptionKey = normalizedPlayerIds.join("|");
+
+  useEffect(() => {
+    if (normalizedPlayerIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const conflictMap = new Map<string, ConflictDocument>();
+
+    const unsubscribers = normalizedPlayerIds.map((playerId) =>
+      firestoreApi.conflicts.subscribe(
+        (items) => {
+          if (cancelled) {
+            return;
+          }
+
+          for (const [conflictId, conflict] of conflictMap.entries()) {
+            if (conflict.playerId === playerId) {
+              conflictMap.delete(conflictId);
+            }
+          }
+
+          items.forEach((item) => {
+            conflictMap.set(item.id, item);
+          });
+
+          setState({
+            key: subscriptionKey,
+            data: [...conflictMap.values()].sort((left, right) =>
+              `${left.startAt}`.localeCompare(`${right.startAt}`),
+            ),
+            error: null,
+          });
+        },
+        [where("playerId", "==", playerId)],
+        (error) => {
+          if (cancelled) {
+            return;
+          }
+
+          setState({
+            key: subscriptionKey,
+            data: [],
+            error: error.message,
+          });
+        },
+      ),
+    );
+
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [normalizedPlayerIds, subscriptionKey]);
+
+  if (normalizedPlayerIds.length === 0) {
+    return {
+      data: [],
+      loading: false,
+      error: null,
+    };
+  }
+
+  return {
+    data: state.key === subscriptionKey ? state.data : [],
+    loading: state.key !== subscriptionKey && state.error === null,
+    error: state.key === subscriptionKey ? state.error : null,
+  };
+}
+
 export default function LoginPage() {
   const access = useAuthSession();
   const [linkedPlayerIdsOverride, setLinkedPlayerIdsOverride] = useState<{
@@ -223,12 +309,7 @@ export default function LoginPage() {
       ? [where("userId", "==", access.authUser.firebaseUser.uid)]
       : undefined,
   });
-  const conflicts = useFirestoreCollection("conflicts", {
-    enabled: Boolean(access.authUser?.firebaseUser.uid),
-    constraints: access.authUser?.firebaseUser.uid
-      ? [where("userId", "==", access.authUser.firebaseUser.uid)]
-      : undefined,
-  });
+  const conflicts = useConflictsByPlayerIds(linkedPlayerIds);
 
   const [mode, setMode] = useState<PortalMode>("signin");
   const [signInEmail, setSignInEmail] = useState("");
@@ -301,9 +382,8 @@ export default function LoginPage() {
   const visibleConflicts = useMemo(
     () =>
       [...conflicts.data]
-        .filter((conflict) => linkedPlayerIds.includes(conflict.playerId))
         .sort((left, right) => `${left.startAt}`.localeCompare(`${right.startAt}`)),
-    [conflicts.data, linkedPlayerIds],
+    [conflicts.data],
   );
   const scheduleEvents = useMemo<Event[]>(
     () =>
@@ -349,7 +429,6 @@ export default function LoginPage() {
             playerIds: [],
             location: event.location,
             teamName: displayedTeamName,
-            scheduleUrl: scheduleTeamId ? getEventTeamScheduleUrl(event, scheduleTeamId) : "",
             status: getEventStatus(event),
           };
         }),
@@ -657,7 +736,6 @@ export default function LoginPage() {
                       linkedTeams.map((team) => (
                         <p key={team.id}>
                           <span className="font-semibold text-[color:var(--ink)]">{team.name}</span>
-                          {team.season ? ` · ${team.season}` : ""}
                         </p>
                       ))
                     )}

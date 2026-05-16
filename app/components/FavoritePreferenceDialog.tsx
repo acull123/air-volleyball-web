@@ -23,6 +23,11 @@ type FavoritePreferenceDialogProps = {
 
 const popupActionClass =
   "inline-flex justify-center rounded-full border border-[#b8dcff] bg-[color:var(--paper)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white";
+const favoriteOptionClass =
+  "group w-full rounded-[1.5rem] border px-5 py-4 text-left transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]";
+const favoriteOptionDefaultClass = "border-[#b8dcff] bg-[color:var(--paper)]";
+const favoriteOptionSelectedClass =
+  "border-transparent bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]";
 
 export default function FavoritePreferenceDialog({
   open,
@@ -93,22 +98,13 @@ export default function FavoritePreferenceDialog({
         <div className="flex min-h-full items-center justify-center">
           <div className="w-full max-w-2xl overflow-hidden rounded-[2rem] border border-[color:var(--line)] bg-white shadow-[0_30px_80px_rgba(8,23,45,0.28)]">
             <div className="px-5 py-6 lg:px-8 lg:py-8">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-[color:var(--muted)]">
-                    Welcome
-                  </p>
-                  <h2 className="mt-2 text-3xl font-bold text-[color:var(--ink)] sm:text-4xl">
-                    Welcome To Air Volleyball
-                  </h2>
-                </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                >
-                  Close
-                </button>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[color:var(--muted)]">
+                  Welcome
+                </p>
+                <h2 className="mt-2 text-3xl font-bold text-[color:var(--ink)] sm:text-4xl">
+                  Welcome To Air Volleyball
+                </h2>
               </div>
 
               <p className="mt-5 text-sm leading-7 text-[color:var(--muted)] sm:text-base">
@@ -161,12 +157,6 @@ export default function FavoritePreferenceDialog({
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--muted)]">
               Save your favorite teams and players so the website can highlight the most relevant events for your family.
             </p>
-            <Link
-              href="/login"
-              className="mt-4 inline-flex rounded-full border border-[#b8dcff] bg-[color:var(--paper)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white"
-            >
-              Sign In Or Create Account
-            </Link>
           </div>
           <button
             type="button"
@@ -210,14 +200,14 @@ export default function FavoritePreferenceDialog({
                             : [...current, team.id],
                         )
                       }
-                      className={`w-full rounded-[1.5rem] border px-5 py-4 text-left transition ${
-                        isSelected
-                          ? "border-[color:var(--ink)] bg-[color:var(--paper)]"
-                          : "border-[color:var(--line)] bg-white hover:bg-[color:var(--paper)]"
+                      className={`${favoriteOptionClass} ${
+                        isSelected ? favoriteOptionSelectedClass : favoriteOptionDefaultClass
                       }`}
                     >
-                      <p className="text-lg font-bold text-[color:var(--ink)]">{team.name}</p>
-                      <p className="mt-1 text-sm text-[color:var(--muted)]">
+                      <p className={`text-lg font-bold ${isSelected ? "text-white" : "text-[color:var(--ink)] group-hover:text-white"}`}>
+                        {team.name}
+                      </p>
+                      <p className={`mt-1 text-sm ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                         {[team.ageGroup, team.season].filter(Boolean).join(" · ") || "Team details coming soon"}
                       </p>
                     </button>
@@ -263,16 +253,14 @@ export default function FavoritePreferenceDialog({
                             : [...current, player.id],
                         )
                       }
-                      className={`w-full rounded-[1.5rem] border px-5 py-4 text-left transition ${
-                        isSelected
-                          ? "border-[color:var(--ink)] bg-[color:var(--paper)]"
-                          : "border-[color:var(--line)] bg-white hover:bg-[color:var(--paper)]"
+                      className={`${favoriteOptionClass} ${
+                        isSelected ? favoriteOptionSelectedClass : favoriteOptionDefaultClass
                       }`}
                     >
-                      <p className="text-lg font-bold text-[color:var(--ink)]">
+                      <p className={`text-lg font-bold ${isSelected ? "text-white" : "text-[color:var(--ink)] group-hover:text-white"}`}>
                         {player.firstName} {player.lastName}
                       </p>
-                      <p className="mt-1 text-sm text-[color:var(--muted)]">
+                      <p className={`mt-1 text-sm ${isSelected ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
                         {[playerTeam?.name, player.position].filter(Boolean).join(" · ") || "Player details coming soon"}
                       </p>
                     </button>
@@ -292,7 +280,7 @@ export default function FavoritePreferenceDialog({
           <button
             type="button"
             onClick={onSkip}
-            className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+            className={popupActionClass}
           >
             Skip For Now
           </button>
@@ -300,7 +288,7 @@ export default function FavoritePreferenceDialog({
             type="button"
             disabled={!hasSelection}
             onClick={() => onSave({ teamIds: selectedTeamIds, playerIds: selectedPlayerIds })}
-            className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+            className={`${popupActionClass} disabled:cursor-not-allowed disabled:opacity-60`}
           >
             Save Favorites
           </button>

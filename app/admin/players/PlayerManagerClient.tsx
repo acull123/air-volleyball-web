@@ -7,6 +7,7 @@ import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import { comparePlayersByName } from "@/lib/player-name";
+import { compareTeamsByAge } from "@/lib/team-sort";
 import type { PlayerDocument } from "@/lib/firebase/schema";
 import { deletePhotoByUrl, uploadPlayerPhoto } from "@/lib/firebase/storage";
 
@@ -134,6 +135,8 @@ export default function PlayerManagerClient() {
       return haystack.includes(normalizedSearch);
     });
   }, [players.data, searchTerm, teams.data]);
+
+  const sortedTeams = useMemo(() => [...teams.data].sort(compareTeamsByAge), [teams.data]);
 
   function resetForm() {
     setSelectedPlayerId(null);
@@ -344,7 +347,7 @@ export default function PlayerManagerClient() {
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               >
                 <option value="">Select team</option>
-                {teams.data.map((team) => (
+                {sortedTeams.map((team) => (
                   <option key={team.id} value={team.id}>
                     {team.name}
                   </option>

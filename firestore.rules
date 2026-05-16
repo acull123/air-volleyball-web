@@ -153,9 +153,13 @@ service cloud.firestore {
 
     match /conflicts/{conflictId} {
       allow create: if isSignedIn()
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.playerId in currentUserDoc().data.playerIds;
       allow read: if isStaff()
-        || (isSignedIn() && resource.data.userId == request.auth.uid);
+        || (
+          isSignedIn()
+          && resource.data.playerId in currentUserDoc().data.playerIds
+        );
       allow update, delete: if isAdmin();
     }
 

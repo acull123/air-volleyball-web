@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import PageHero from "../components/PageHero";
@@ -150,7 +151,16 @@ function PlayersPageContent() {
                   <div className="mt-4 space-y-2 text-sm text-[color:var(--muted)]">
                     <p>
                       <span className="font-semibold text-[color:var(--ink)]">Team:</span>{" "}
-                      {team?.name || "Team assignment coming soon"}
+                      {team ? (
+                        <Link
+                          href={`/teams#team-${team.id}`}
+                          className="font-semibold text-[color:var(--ink)] underline decoration-[color:var(--line)] underline-offset-4 transition hover:text-[color:var(--accent)]"
+                        >
+                          {team.name}
+                        </Link>
+                      ) : (
+                        "Team assignment coming soon"
+                      )}
                     </p>
                     <p>
                       <span className="font-semibold text-[color:var(--ink)]">Position:</span>{" "}

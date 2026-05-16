@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "deploy:prod": "npm run build && npx firebase-tools deploy --only hosting --project air-volleyball",
     "start": "next start",
     "lint": "eslint"
   },

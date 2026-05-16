@@ -6,6 +6,7 @@ import SectionCard from "@/app/components/SectionCard";
 import { useAuthSession } from "@/lib/firebase/auth";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import type { UserDocument, UserRole } from "@/lib/firebase/schema";
+import { compareTeamsByAge } from "@/lib/team-sort";
 
 type RoleSelection = UserRole | "inactive";
 type CoachSetupDraft = {
@@ -128,6 +129,7 @@ export default function UserSetupManagerClient() {
     () => payTypes.data.filter((payType) => payType.defaulted).map((payType) => payType.id),
     [payTypes.data],
   );
+  const sortedTeams = useMemo(() => [...teams.data].sort(compareTeamsByAge), [teams.data]);
 
   async function updateUser(user: UserDocument, updates: Partial<Pick<UserDocument, "role" | "coachId" | "active">>) {
     const nextRole = updates.role ?? user.role;
@@ -577,7 +579,7 @@ export default function UserSetupManagerClient() {
                           Add teams before assigning coaches.
                         </span>
                       )}
-                      {teams.data.map((team) => (
+                      {sortedTeams.map((team) => (
                         <label key={team.id} className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]">
                           <input
                             type="checkbox"

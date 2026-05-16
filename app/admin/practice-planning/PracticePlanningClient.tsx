@@ -6,6 +6,7 @@ import ClubCalendar from "@/app/components/ClubCalendar";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import { getEventTeamIds } from "@/lib/event-teams";
 import type { ConflictDocument, EventDocument, GymSpaceDocument, TeamDocument } from "@/lib/firebase/schema";
+import { compareTeamsByAge } from "@/lib/team-sort";
 
 type PracticePlanSettings = {
   practicesPerWeek: string;
@@ -187,6 +188,22 @@ function buildPracticeTitle(team: TeamDocument) {
   return `Practice ${team.name}`;
 }
 
+function getPracticeSlotKey(gymSpaceId: string, dateKey: string, startTime: string) {
+  return `${gymSpaceId}:${dateKey}:${startTime}`;
+}
+
+function getAvailableCourtNumber(usedCourts: Set<number>, courtCount: number) {
+  const normalizedCourtCount = Math.max(1, courtCount || 1);
+
+  for (let courtNumber = 1; courtNumber <= normalizedCourtCount; courtNumber += 1) {
+    if (!usedCourts.has(courtNumber)) {
+      return courtNumber;
+    }
+  }
+
+  return null;
+}
+
 function getPracticeConflictNamesForEvent(
   event: EventDocument,
   teams: TeamDocument[],
@@ -238,7 +255,7 @@ export default function PracticePlanningClient() {
     () =>
       [...teams.data]
         .filter((team) => team.active !== false)
-        .sort((left, right) => `${left.ageGroup} ${left.name}`.localeCompare(`${right.ageGroup} ${right.name}`)),
+        .sort(compareTeamsByAge),
     [teams.data],
   );
   const practiceEvents = useMemo(
@@ -336,6 +353,7 @@ export default function PracticePlanningClient() {
       endTime,
       durationMinutes,
       gymSpaceId: event.gymSpaceId || "",
+      courtNumber: event.courtNumber,
       practicePublished: event.practicePublished,
       location: event.location || "",
       notes: event.notes || "",
@@ -420,10 +438,11 @@ export default function PracticePlanningClient() {
       return;
     }
 
-    const slotUsage = new Map<string, number>();
+    const slotCourtUsage = new Map<string, Set<number>>();
     const createdPractices: Array<{
       team: TeamDocument;
       slot: PracticeSlot;
+      courtNumber: number;
       conflictNames: string[];
     }> = [];
     let skippedPracticeCount = 0;
@@ -439,6 +458,25 @@ export default function PracticePlanningClient() {
       practiceEvents
         .filter((event) => dates.includes(event.startDate))
         .forEach((event) => {
+          if (event.gymSpaceId && event.startTime) {
+            const gymSpace = gymSpaces.data.find((entry) => entry.id === event.gymSpaceId);
+            const slotKey = getPracticeSlotKey(event.gymSpaceId, event.startDate, event.startTime);
+            const usedCourts = slotCourtUsage.get(slotKey) ?? new Set<number>();
+            const courtCount = Math.max(1, gymSpace?.courtCount || 1);
+            const savedCourtNumber =
+              typeof event.courtNumber === "number" &&
+              event.courtNumber >= 1 &&
+              event.courtNumber <= courtCount
+                ? event.courtNumber
+                : null;
+            const courtNumber = savedCourtNumber ?? getAvailableCourtNumber(usedCourts, courtCount);
+
+            if (courtNumber) {
+              usedCourts.add(courtNumber);
+              slotCourtUsage.set(slotKey, usedCourts);
+            }
+          }
+
           getEventTeamIds(event).forEach((teamId) => {
             const teamWeekKey = `${teamId}:${getWeekKey(event.startDate)}`;
             const datesForTeamWeek = existingPracticeDatesByTeamWeek.get(teamWeekKey) ?? new Set<string>();
@@ -462,21 +500,24 @@ export default function PracticePlanningClient() {
             const fallbackSlots = weekSlots.length > 0 ? weekSlots : slots;
             const slot =
               fallbackSlots.find((candidate) => {
-                const slotKey = `${candidate.gymSpace.id}:${candidate.dateKey}:${candidate.startTime}`;
-                const usage = slotUsage.get(slotKey) ?? 0;
+                const slotKey = getPracticeSlotKey(candidate.gymSpace.id, candidate.dateKey, candidate.startTime);
+                const usedCourts = slotCourtUsage.get(slotKey) ?? new Set<number>();
                 const conflictNames = getPracticeConflictNames(team, candidate, durationMinutes, conflicts.data);
 
                 return (
-                  usage < candidate.gymSpace.courtCount &&
+                  getAvailableCourtNumber(usedCourts, candidate.gymSpace.courtCount) !== null &&
                   !teamPracticeDates.has(candidate.dateKey) &&
                   conflictNames.length === 0
                 );
               }) ??
               fallbackSlots.find((candidate) => {
-                const slotKey = `${candidate.gymSpace.id}:${candidate.dateKey}:${candidate.startTime}`;
-                const usage = slotUsage.get(slotKey) ?? 0;
+                const slotKey = getPracticeSlotKey(candidate.gymSpace.id, candidate.dateKey, candidate.startTime);
+                const usedCourts = slotCourtUsage.get(slotKey) ?? new Set<number>();
 
-                return usage < candidate.gymSpace.courtCount && !teamPracticeDates.has(candidate.dateKey);
+                return (
+                  getAvailableCourtNumber(usedCourts, candidate.gymSpace.courtCount) !== null &&
+                  !teamPracticeDates.has(candidate.dateKey)
+                );
               }) ??
               fallbackSlots.find((candidate) => !teamPracticeDates.has(candidate.dateKey));
 
@@ -485,18 +526,26 @@ export default function PracticePlanningClient() {
               return;
             }
 
-            const slotKey = `${slot.gymSpace.id}:${slot.dateKey}:${slot.startTime}`;
+            const slotKey = getPracticeSlotKey(slot.gymSpace.id, slot.dateKey, slot.startTime);
+            const usedCourts = slotCourtUsage.get(slotKey) ?? new Set<number>();
+            const courtNumber = getAvailableCourtNumber(usedCourts, slot.gymSpace.courtCount);
             const conflictNames = getPracticeConflictNames(team, slot, durationMinutes, conflicts.data);
 
-            slotUsage.set(slotKey, (slotUsage.get(slotKey) ?? 0) + 1);
+            if (!courtNumber) {
+              skippedPracticeCount += 1;
+              return;
+            }
+
+            usedCourts.add(courtNumber);
+            slotCourtUsage.set(slotKey, usedCourts);
             teamPracticeDates.add(slot.dateKey);
-            createdPractices.push({ team, slot, conflictNames });
+            createdPractices.push({ team, slot, courtNumber, conflictNames });
           }
         });
       });
 
       await Promise.all(
-        createdPractices.map(({ team, slot, conflictNames }) =>
+        createdPractices.map(({ team, slot, courtNumber, conflictNames }) =>
           firestoreApi.events.create({
             type: "practice",
             title: buildPracticeTitle(team),
@@ -513,8 +562,9 @@ export default function PracticePlanningClient() {
             endTime: slot.endTime,
             durationMinutes,
             gymSpaceId: slot.gymSpace.id,
+            courtNumber,
             practicePublished: false,
-            location: getGymSpaceLocation(slot.gymSpace),
+            location: `${getGymSpaceLocation(slot.gymSpace)} - Court ${courtNumber}`,
             notes: conflictNames.length > 0 ? `Conflicts: ${[...new Set(conflictNames)].join(", ")}` : "",
             active: true,
           }),
@@ -614,7 +664,7 @@ export default function PracticePlanningClient() {
 
       <ClubCalendar
         events={practiceEvents}
-        teams={teams.data}
+        teams={activeTeams}
         conflicts={conflicts.data}
         gymSpaces={gymSpaces.data}
         loading={teams.loading || gymSpaces.loading || conflicts.loading || events.loading}

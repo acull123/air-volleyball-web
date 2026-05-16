@@ -62,8 +62,6 @@ export interface TeamDocument extends BaseDocument {
   name: string;
   season: string;
   ageGroup: string;
-  practicesPerWeek: number;
-  practiceDurationMinutes: number;
   expectedPlayersPerTeam: number;
   expectedTournamentCount: number;
   coachIds: string[];
@@ -122,6 +120,7 @@ export interface EventDocument extends BaseDocument {
   endTime: string;
   durationMinutes: number;
   gymSpaceId: string;
+  courtNumber?: number;
   practicePublished: boolean;
   location: string;
   notes: string;

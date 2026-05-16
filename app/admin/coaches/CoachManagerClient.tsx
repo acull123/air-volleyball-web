@@ -6,6 +6,7 @@ import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import type { ClubEventType, CoachDocument } from "@/lib/firebase/schema";
 import { deletePhotoByUrl, uploadCoachPhoto } from "@/lib/firebase/storage";
+import { compareTeamsByAge } from "@/lib/team-sort";
 
 type CoachDraft = {
   firstName: string;
@@ -137,6 +138,7 @@ export default function CoachManagerClient() {
         .includes(normalizedSearch);
     });
   }, [coaches.data, searchTerm, teams.data]);
+  const sortedTeams = useMemo(() => [...teams.data].sort(compareTeamsByAge), [teams.data]);
   const sortedPayTypes = useMemo(
     () =>
       [...payTypes.data].sort((left, right) =>
@@ -341,7 +343,7 @@ export default function CoachManagerClient() {
                     Add teams before assigning coaches.
                   </span>
                 )}
-                {teams.data.map((team) => (
+                {sortedTeams.map((team) => (
                   <label
                     key={team.id}
                     className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]"

@@ -8,6 +8,7 @@ import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import { formatEventStatus, getEventStatus } from "@/lib/event-status";
 import { getEventTeamLabel, getEventTeamSchedules } from "@/lib/event-teams";
 import { compareAthletesByName } from "@/lib/player-name";
+import { compareTeamsByAge } from "@/lib/team-sort";
 import type { EventDocument, EventTeamSchedule, GymSpaceDocument, TeamDocument } from "@/lib/firebase/schema";
 
 type EventDraft = {
@@ -183,6 +184,10 @@ function isTournamentType(type: EventDocument["type"]) {
   return type === "tournament" || type === "twoDayTournament";
 }
 
+function eventTypeUsesTeams(type: EventDocument["type"]) {
+  return isTournamentType(type) || type === "practice";
+}
+
 function getPracticeEndDate(startDate: string, startTime: string, durationMinutes: number) {
   const start = new Date(`${startDate}T${startTime || "00:00"}:00`);
 
@@ -222,6 +227,7 @@ export default function EventManagerClient() {
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const isEditingEvent = Boolean(selectedEventId);
 
   const filteredEvents = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -259,6 +265,7 @@ export default function EventManagerClient() {
         .sort((left, right) => left.facilityName.localeCompare(right.facilityName)),
     [gymSpaces.data],
   );
+  const sortedTeams = useMemo(() => [...teams.data].sort(compareTeamsByAge), [teams.data]);
 
   function resetForm() {
     setSelectedEventId(null);
@@ -285,12 +292,11 @@ export default function EventManagerClient() {
       const isPractice = draft.type === "practice";
       const isTournament = isTournamentType(draft.type);
       const isCamp = draft.type === "camp";
+      const usesTeams = eventTypeUsesTeams(draft.type);
       const needsGymSpace = isPractice;
       const durationMinutes = draft.durationMinutes.trim() ? Number(draft.durationMinutes) : 0;
       const practiceEndDate = getPracticeEndDate(draft.startDate, startTime, durationMinutes);
-      const teamSchedules = isPractice
-        ? draft.teamSchedules.slice(0, 1)
-        : draft.teamSchedules;
+      const teamSchedules = usesTeams ? (isPractice ? draft.teamSchedules.slice(0, 1) : draft.teamSchedules) : [];
       const payload = {
         type: draft.type,
         title: isPractice ? getPracticeTitle(teamSchedules, teams.data) : draft.title.trim(),
@@ -421,7 +427,11 @@ export default function EventManagerClient() {
                     return {
                       ...current,
                       type: nextType,
-                      teamSchedules: nextType === "practice" && firstTeamSchedule ? [firstTeamSchedule] : current.teamSchedules,
+                      teamSchedules: eventTypeUsesTeams(nextType)
+                        ? nextType === "practice" && firstTeamSchedule
+                          ? [firstTeamSchedule]
+                          : current.teamSchedules
+                        : [],
                     };
                   })
                 }
@@ -453,52 +463,60 @@ export default function EventManagerClient() {
                 </select>
               </label>
             )}
-            <div className="md:col-span-2 flex flex-col gap-3 text-sm font-semibold text-[color:var(--ink)]">
-              {draft.type === "practice" ? "Team" : "Team schedules"}
-              <div className="space-y-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
-                {teams.data.length === 0 ? (
-                  <p className="text-sm font-normal text-[color:var(--muted)]">No teams have been added yet.</p>
-                ) : (
-                  teams.data.map((team) => {
-                    const teamSchedule = draft.teamSchedules.find((entry) => entry.teamId === team.id);
-                    const isSelected = Boolean(teamSchedule);
+            {eventTypeUsesTeams(draft.type) && (
+              <div className="md:col-span-2 flex flex-col gap-3 text-sm font-semibold text-[color:var(--ink)]">
+                {draft.type === "practice" ? "Team" : "Team schedules"}
+                <div className="grid gap-3 rounded-2xl border border-[color:var(--line)] px-4 py-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {teams.data.length === 0 ? (
+                    <p className="text-sm font-normal text-[color:var(--muted)] sm:col-span-2 xl:col-span-3">
+                      No teams have been added yet.
+                    </p>
+                  ) : (
+                    sortedTeams.map((team) => {
+                      const teamSchedule = draft.teamSchedules.find((entry) => entry.teamId === team.id);
+                      const isSelected = Boolean(teamSchedule);
+                      const showScheduleLink = isEditingEvent && draft.type !== "practice";
 
-                    return (
-                      <div key={team.id} className="grid gap-3 md:grid-cols-[minmax(0,14rem)_1fr] md:items-center">
-                        <label className="flex items-center gap-3">
-                          <input
-                            type={draft.type === "practice" ? "radio" : "checkbox"}
-                            name={draft.type === "practice" ? "practiceTeam" : undefined}
-                            checked={isSelected}
-                            onChange={(event) => {
-                              if (draft.type === "practice") {
-                                setDraft((current) => ({
-                                  ...current,
-                                  teamSchedules: event.target.checked ? [{ teamId: team.id, scheduleUrl: "" }] : [],
-                                }));
-                                return;
-                              }
+                      return (
+                        <div
+                          key={team.id}
+                          className="grid min-h-full gap-3 rounded-2xl bg-[color:var(--paper)] px-3 py-3"
+                        >
+                          <label className="flex items-center gap-3">
+                            <input
+                              type={draft.type === "practice" ? "radio" : "checkbox"}
+                              name={draft.type === "practice" ? "practiceTeam" : undefined}
+                              checked={isSelected}
+                              onChange={(event) => {
+                                if (draft.type === "practice") {
+                                  setDraft((current) => ({
+                                    ...current,
+                                    teamSchedules: event.target.checked ? [{ teamId: team.id, scheduleUrl: "" }] : [],
+                                  }));
+                                  return;
+                                }
 
-                              toggleTeamSchedule(team.id, event.target.checked);
-                            }}
-                          />
-                          <span>{team.name}</span>
-                        </label>
-                        {draft.type !== "practice" && (
-                          <input
-                            value={teamSchedule?.scheduleUrl ?? ""}
-                            onChange={(event) => updateTeamScheduleUrl(team.id, event.target.value)}
-                            className="rounded-2xl border border-[color:var(--line)] px-4 py-3 disabled:bg-[color:var(--paper)]"
-                            disabled={!isSelected}
-                            placeholder="Team schedule link"
-                          />
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+                                toggleTeamSchedule(team.id, event.target.checked);
+                              }}
+                            />
+                            <span>{team.name}</span>
+                          </label>
+                          {showScheduleLink && (
+                            <input
+                              value={teamSchedule?.scheduleUrl ?? ""}
+                              onChange={(event) => updateTeamScheduleUrl(team.id, event.target.value)}
+                              className="rounded-2xl border border-[color:var(--line)] px-4 py-3 disabled:bg-[color:var(--paper)]"
+                              disabled={!isSelected}
+                              placeholder="Team schedule link"
+                            />
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
-            </div>
+            )}
             {draft.type !== "practice" && (
               <>
                 <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">

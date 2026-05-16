@@ -135,7 +135,7 @@ export default function EventDetailsPage() {
             Event details are unavailable right now.
           </div>
         ) : (
-          <div className="grid gap-8 lg:grid-cols-[1fr_22rem]">
+          <div>
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">
                 {formatEventType(event.data.type)}
@@ -166,23 +166,14 @@ export default function EventDetailsPage() {
                       {teamSchedules.map((entry) => {
                         const teamName = teams.data.find((team) => team.id === entry.teamId)?.name ?? "Team";
 
-                        return entry.scheduleUrl ? (
-                          <a
+                        return (
+                          <Link
                             key={entry.teamId}
-                            href={toExternalHref(entry.scheduleUrl)}
-                            target="_blank"
-                            rel="noreferrer"
+                            href={`/team-schedule?team=${entry.teamId}`}
                             className="rounded-full border border-[color:var(--line)] px-3 py-1 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
                           >
                             {teamName}
-                          </a>
-                        ) : (
-                          <span
-                            key={entry.teamId}
-                            className="rounded-full bg-[color:var(--paper)] px-3 py-1 text-sm font-semibold text-[color:var(--ink)]"
-                          >
-                            {teamName}
-                          </span>
+                          </Link>
                         );
                       })}
                     </div>
@@ -201,40 +192,6 @@ export default function EventDetailsPage() {
               {event.data.notes && (
                 <p className="mt-6 text-sm leading-7 text-[color:var(--muted)]">{event.data.notes}</p>
               )}
-            </div>
-
-            <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">Next Step</p>
-              <div className="mt-4 flex flex-col gap-3">
-                {(event.data.type === "camp" || event.data.type === "tryout") && (
-                  <Link
-                    href={`/register?event=${event.data.id}`}
-                    className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-white"
-                  >
-                    Register For This Event
-                  </Link>
-                )}
-                {event.data.externalUrl && (
-                  <a
-                    href={toExternalHref(event.data.externalUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-white"
-                  >
-                    Open External Link
-                  </a>
-                )}
-                {event.data.paymentUrl && (
-                  <a
-                    href={toExternalHref(event.data.paymentUrl)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-white"
-                  >
-                    Open Payment Link
-                  </a>
-                )}
-              </div>
             </div>
           </div>
         )}
