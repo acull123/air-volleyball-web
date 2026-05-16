@@ -19,6 +19,11 @@ function getCoachTeamIds(coach: CoachDocument): string[] {
   return legacyTeamId ? [legacyTeamId] : [];
 }
 
+function getAgeGroupSortValue(ageGroup: string) {
+  const match = ageGroup.match(/\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+}
+
 export default function TeamsPage() {
   const teams = useFirestoreCollection("teams");
   const players = useFirestoreCollection("players");
@@ -28,7 +33,12 @@ export default function TeamsPage() {
     () =>
       [...teams.data]
         .filter((team) => team.active !== false)
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort(
+          (a, b) =>
+            getAgeGroupSortValue(a.ageGroup) - getAgeGroupSortValue(b.ageGroup) ||
+            a.ageGroup.localeCompare(b.ageGroup) ||
+            a.name.localeCompare(b.name),
+        ),
     [teams.data],
   );
 
@@ -71,41 +81,71 @@ export default function TeamsPage() {
               );
 
               return (
-                <Link
+                <article
                   key={team.id}
-                  href={`/players?team=${team.id}`}
-                  className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+                  className="rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5"
                 >
-                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)] group-hover:text-[#d0deed]">
+                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">
                     {team.ageGroup || "Team"}
                   </p>
-                  <h2 className="mt-2 text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">{team.name}</h2>
-                  <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-                    {[team.season, team.level].filter(Boolean).join(" · ") || "Season details coming soon"}
+                  <h2 className="mt-2 text-2xl font-bold text-[color:var(--ink)]">{team.name}</h2>
+                  <p className="mt-3 text-sm leading-7 text-[color:var(--muted)]">
+                    {team.season || "Season notes coming soon"}
                   </p>
-                  <div className="mt-5 space-y-2 text-sm text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                  <div className="mt-5 space-y-3">
+                    <details className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--paper)] px-4 py-3">
+                      <summary className="cursor-pointer text-sm font-bold text-[color:var(--ink)]">
+                        Team expectations
+                      </summary>
+                      <div className="mt-3 space-y-2 text-sm text-[color:var(--muted)]">
+                        <p>
+                          <span className="font-semibold text-[color:var(--ink)]">Practices:</span>{" "}
+                          {team.practicesPerWeek || 0} per week
+                          {team.practiceDurationMinutes ? ` · ${team.practiceDurationMinutes} minutes` : ""}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-[color:var(--ink)]">Players:</span>{" "}
+                          {team.expectedPlayersPerTeam
+                            ? `${team.expectedPlayersPerTeam} expected`
+                            : "Player count coming soon"}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-[color:var(--ink)]">Tournaments:</span>{" "}
+                          {team.expectedTournamentCount
+                            ? `${team.expectedTournamentCount} expected`
+                            : "Tournament count coming soon"}
+                        </p>
+                      </div>
+                    </details>
+
+                    {team.description && (
+                      <details className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--paper)] px-4 py-3">
+                        <summary className="cursor-pointer text-sm font-bold text-[color:var(--ink)]">
+                          Details
+                        </summary>
+                        <p className="mt-3 text-sm leading-7 text-[color:var(--muted)]">{team.description}</p>
+                      </details>
+                    )}
+                  </div>
+                  <div className="mt-5 space-y-2 text-sm text-[color:var(--muted)]">
                     <p>
-                      <span className="font-semibold text-[color:var(--ink)] group-hover:text-white">Coaches:</span>{" "}
+                      <span className="font-semibold text-[color:var(--ink)]">Coaches:</span>{" "}
                       {staff.length
                         ? staff.map((coach) => `${coach.firstName} ${coach.lastName}`).join(", ")
                         : "Coach assignments coming soon"}
                     </p>
                     <p>
-                      <span className="font-semibold text-[color:var(--ink)] group-hover:text-white">Roster Count:</span>{" "}
+                      <span className="font-semibold text-[color:var(--ink)]">Roster Count:</span>{" "}
                       {roster.length} athletes
                     </p>
-                    <p>
-                      <span className="font-semibold text-[color:var(--ink)] group-hover:text-white">Schedule:</span>{" "}
-                      {team.scheduleId ? "Schedule available" : "Schedule details coming soon"}
-                    </p>
                   </div>
-                  {team.description && (
-                    <p className="mt-4 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">{team.description}</p>
-                  )}
-                  <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition group-hover:border-white/30 group-hover:text-white">
+                  <Link
+                    href={`/players?team=${team.id}`}
+                    className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white"
+                  >
                     View roster
-                  </div>
-                </Link>
+                  </Link>
+                </article>
               );
             })}
           </div>

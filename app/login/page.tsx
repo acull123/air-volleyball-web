@@ -82,6 +82,20 @@ function toDateTimeInputValue(date: Date) {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 }
 
+function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+function isCurrentOrFutureEvent(event: { startDate: string; endDate?: string }) {
+  const todayKey = toDateKey(new Date());
+  const eventEndDate = event.endDate || event.startDate;
+
+  return !eventEndDate || eventEndDate >= todayKey;
+}
+
 function formatConflictDateTime(value: string) {
   if (!value) {
     return "Date coming soon";
@@ -295,6 +309,7 @@ export default function LoginPage() {
     () =>
       [...events.data]
         .filter((event) => event.active !== false)
+        .filter(isCurrentOrFutureEvent)
         .filter((event) => event.type !== "areaCamp")
         .filter((event) => {
           if (event.type === "camp" || event.type === "tryout") {
@@ -328,7 +343,7 @@ export default function LoginPage() {
             eventType: formatEventType(event.type),
             description: event.notes,
             startsAt: `${event.startDate}T${event.startTime || "00:00"}`,
-            endsAt: `${event.endDate || event.startDate}T${event.startTime || "00:00"}`,
+            endsAt: `${event.endDate || event.startDate}T${event.endTime || event.startTime || "00:00"}`,
             teamIds: eventTeamIds,
             coachIds: [],
             playerIds: [],

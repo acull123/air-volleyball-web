@@ -2,6 +2,21 @@ type PayPalAccessTokenResponse = {
   access_token: string;
 };
 
+export type PayPalOrderCaptureResponse = {
+  id: string;
+  status: string;
+  purchase_units?: Array<{
+    custom_id?: string;
+    payments?: {
+      captures?: Array<{
+        id: string;
+        status: string;
+        amount?: { value?: string; currency_code?: string };
+      }>;
+    };
+  }>;
+};
+
 function getPayPalBaseUrl() {
   return process.env.PAYPAL_ENV === "live"
     ? "https://api-m.paypal.com"
@@ -58,6 +73,10 @@ export async function createPayPalOrder(params: {
   amount: number;
   currencyCode?: string;
 }) {
+  if (!Number.isFinite(params.amount) || params.amount <= 0) {
+    throw new Error("Payment amount must be greater than zero.");
+  }
+
   const accessToken = await getPayPalAccessToken();
   const currencyCode = params.currencyCode ?? "USD";
 
@@ -72,6 +91,7 @@ export async function createPayPalOrder(params: {
       purchase_units: [
         {
           custom_id: params.eventId,
+          reference_id: params.eventId,
           description: params.eventTitle,
           amount: {
             currency_code: currencyCode,
@@ -103,18 +123,5 @@ export async function capturePayPalOrder(orderId: string) {
     throw new Error("Unable to capture payment.");
   }
 
-  return (await response.json()) as {
-    id: string;
-    status: string;
-    purchase_units?: Array<{
-      custom_id?: string;
-      payments?: {
-        captures?: Array<{
-          id: string;
-          status: string;
-          amount?: { value?: string; currency_code?: string };
-        }>;
-      };
-    }>;
-  };
+  return (await response.json()) as PayPalOrderCaptureResponse;
 }

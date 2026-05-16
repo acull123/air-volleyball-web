@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState, type FormEvent } from "react";
+import Link from "next/link";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { getEventTeamSchedules } from "@/lib/event-teams";
 import { comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
 import type { CoachDocument, TeamDocument } from "@/lib/firebase/schema";
@@ -12,10 +14,10 @@ type TeamDraft = {
   name: string;
   season: string;
   ageGroup: string;
-  level: string;
   practicesPerWeek: string;
   practiceDurationMinutes: string;
-  scheduleId: string;
+  expectedPlayersPerTeam: string;
+  expectedTournamentCount: string;
   description: string;
   playerIds: string[];
   coachIds: string[];
@@ -26,10 +28,10 @@ const emptyDraft: TeamDraft = {
   name: "",
   season: "",
   ageGroup: "",
-  level: "",
   practicesPerWeek: "2",
   practiceDurationMinutes: "120",
-  scheduleId: "",
+  expectedPlayersPerTeam: "",
+  expectedTournamentCount: "",
   description: "",
   playerIds: [],
   coachIds: [],
@@ -41,10 +43,16 @@ function mapTeamToDraft(team: TeamDocument): TeamDraft {
     name: team.name,
     season: team.season,
     ageGroup: team.ageGroup,
-    level: team.level,
     practicesPerWeek: String(team.practicesPerWeek || 2),
     practiceDurationMinutes: String(team.practiceDurationMinutes || 120),
-    scheduleId: team.scheduleId,
+    expectedPlayersPerTeam:
+      team.expectedPlayersPerTeam === undefined || team.expectedPlayersPerTeam === null
+        ? ""
+        : String(team.expectedPlayersPerTeam),
+    expectedTournamentCount:
+      team.expectedTournamentCount === undefined || team.expectedTournamentCount === null
+        ? ""
+        : String(team.expectedTournamentCount),
     description: team.description,
     playerIds: team.playerIds ?? [],
     coachIds: team.coachIds ?? [],
@@ -85,6 +93,7 @@ export default function TeamManagerClient() {
   const teams = useFirestoreCollection("teams");
   const players = useFirestoreCollection("players");
   const coaches = useFirestoreCollection("coaches");
+  const events = useFirestoreCollection("events");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [playerFilter, setPlayerFilter] = useState("");
@@ -92,6 +101,7 @@ export default function TeamManagerClient() {
   const [draft, setDraft] = useState<TeamDraft>(emptyDraft);
   const [selectedPhotoName, setSelectedPhotoName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [clearingTeamId, setClearingTeamId] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -115,7 +125,14 @@ export default function TeamManagerClient() {
         .map((coach) => `${coach.firstName} ${coach.lastName}`)
         .join(" ");
 
-      return [team.name, team.season, team.ageGroup, team.level, team.description, playerNames, coachNames]
+      return [
+        team.name,
+        team.season,
+        team.ageGroup,
+        team.description,
+        playerNames,
+        coachNames,
+      ]
         .join(" ")
         .toLowerCase()
         .includes(normalizedSearch);
@@ -196,10 +213,14 @@ export default function TeamManagerClient() {
         name: draft.name.trim(),
         season: draft.season.trim(),
         ageGroup: draft.ageGroup.trim(),
-        level: draft.level.trim(),
         practicesPerWeek: Number(draft.practicesPerWeek),
         practiceDurationMinutes: Number(draft.practiceDurationMinutes),
-        scheduleId: draft.scheduleId.trim(),
+        expectedPlayersPerTeam: draft.expectedPlayersPerTeam.trim()
+          ? Number(draft.expectedPlayersPerTeam)
+          : 0,
+        expectedTournamentCount: draft.expectedTournamentCount.trim()
+          ? Number(draft.expectedTournamentCount)
+          : 0,
         description: draft.description.trim(),
         playerIds: sortIds(draft.playerIds),
         coachIds: sortIds(draft.coachIds),
@@ -214,9 +235,11 @@ export default function TeamManagerClient() {
 
       if (
         Number.isNaN(basePayload.practicesPerWeek) ||
-        Number.isNaN(basePayload.practiceDurationMinutes)
+        Number.isNaN(basePayload.practiceDurationMinutes) ||
+        Number.isNaN(basePayload.expectedPlayersPerTeam) ||
+        Number.isNaN(basePayload.expectedTournamentCount)
       ) {
-        throw new Error("Practice schedule settings are required.");
+        throw new Error("Team expectation settings must be valid numbers.");
       }
 
       const teamId = selectedTeamId ?? (await firestoreApi.teams.create(basePayload));
@@ -354,6 +377,68 @@ export default function TeamManagerClient() {
     }
   }
 
+  async function handleClearTeamSeason(team: TeamDocument) {
+    const confirmed = window.confirm(
+      `Clear season data for ${team.name}? This keeps the team record, but unassigns players and coaches and removes events tied to this team.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingTeamId(team.id);
+    setStatus(null);
+    setError(null);
+
+    try {
+      const playerUpdates = players.data
+        .filter((player) => player.teamId === team.id || (team.playerIds ?? []).includes(player.id))
+        .map((player) => firestoreApi.players.update(player.id, { teamId: "" }));
+
+      const coachUpdates = coaches.data
+        .filter((coach) => getCoachTeamIds(coach).includes(team.id))
+        .map((coach) =>
+          firestoreApi.coaches.update(coach.id, {
+            teamIds: getCoachTeamIds(coach).filter((entry) => entry !== team.id),
+          }),
+        );
+
+      const eventUpdates = events.data
+        .filter((event) => getEventTeamSchedules(event).some((entry) => entry.teamId === team.id))
+        .map((event) => {
+          const remainingTeamSchedules = getEventTeamSchedules(event).filter((entry) => entry.teamId !== team.id);
+
+          return remainingTeamSchedules.length === 0
+            ? firestoreApi.events.remove(event.id)
+            : firestoreApi.events.update(event.id, { teamSchedules: remainingTeamSchedules });
+        });
+
+      await Promise.all([
+        ...playerUpdates,
+        ...coachUpdates,
+        ...eventUpdates,
+        firestoreApi.teams.update(team.id, {
+          playerIds: [],
+          coachIds: [],
+        }),
+      ]);
+
+      if (selectedTeamId === team.id) {
+        setDraft((current) => ({
+          ...current,
+          playerIds: [],
+          coachIds: [],
+        }));
+      }
+
+      setStatus(`${team.name} season data cleared.`);
+    } catch (clearError) {
+      setError(clearError instanceof Error ? clearError.message : "Unable to clear team season data.");
+    } finally {
+      setClearingTeamId(null);
+    }
+  }
+
   return (
     <>
       <PageHero
@@ -377,11 +462,12 @@ export default function TeamManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Season
-              <input
+              Season notes
+              <textarea
                 value={draft.season}
                 onChange={(event) => setDraft((current) => ({ ...current, season: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                placeholder="Describe this team's season expectations or timing."
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
@@ -398,14 +484,6 @@ export default function TeamManagerClient() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Level
-              <input
-                value={draft.level}
-                onChange={(event) => setDraft((current) => ({ ...current, level: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               <span>
@@ -443,10 +521,26 @@ export default function TeamManagerClient() {
               </select>
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Schedule ID
+              Expected players per team
               <input
-                value={draft.scheduleId}
-                onChange={(event) => setDraft((current) => ({ ...current, scheduleId: event.target.value }))}
+                type="number"
+                min="0"
+                value={draft.expectedPlayersPerTeam}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, expectedPlayersPerTeam: event.target.value }))
+                }
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Expected tournaments
+              <input
+                type="number"
+                min="0"
+                value={draft.expectedTournamentCount}
+                onChange={(event) =>
+                  setDraft((current) => ({ ...current, expectedTournamentCount: event.target.value }))
+                }
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               />
             </label>
@@ -608,7 +702,7 @@ export default function TeamManagerClient() {
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Search by team, season, age group, level, player, or coach"
+                placeholder="Search by team, season, age group, player, or coach"
               />
             </label>
           </div>
@@ -629,6 +723,9 @@ export default function TeamManagerClient() {
                 .filter((player) => player.teamId === team.id)
                 .sort(comparePlayersByName);
               const teamCoaches = coaches.data.filter((coach) => getCoachTeamIds(coach).includes(team.id));
+              const teamEventCount = events.data.filter((event) =>
+                getEventTeamSchedules(event).some((entry) => entry.teamId === team.id),
+              ).length;
 
               return (
                 <div key={team.id} className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4">
@@ -636,25 +733,36 @@ export default function TeamManagerClient() {
                     <div className="space-y-1">
                       <p className="text-lg font-bold text-[color:var(--ink)]">{team.name}</p>
                       <p className="text-sm text-[color:var(--muted)]">
-                        {[team.season, team.ageGroup, team.level].filter(Boolean).join(" · ") || "No details set"}
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Practices: {team.practicesPerWeek || 0} per week · {team.practiceDurationMinutes || 0} minutes
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
                         Players: {teamPlayers.length ? teamPlayers.map((player) => `${player.firstName} ${player.lastName}`).join(", ") : "No players assigned"}
                       </p>
                       <p className="text-sm text-[color:var(--muted)]">
                         Coaches: {teamCoaches.length ? teamCoaches.map((coach) => `${coach.firstName} ${coach.lastName}`).join(", ") : "No coaches assigned"}
                       </p>
+                      <p className="text-sm text-[color:var(--muted)]">
+                        Events: {teamEventCount} linked
+                      </p>
                     </div>
                     <div className="flex flex-wrap gap-3">
+                      <Link
+                        href={`/players?team=${team.id}`}
+                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                      >
+                        View
+                      </Link>
                       <button
                         type="button"
                         onClick={() => beginEdit(team)}
                         className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
                       >
                         Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={clearingTeamId === team.id}
+                        onClick={() => void handleClearTeamSeason(team)}
+                        className="rounded-full border border-[#e4c47d] px-4 py-2 text-sm font-semibold text-[#7a4b00] transition hover:bg-[#fff8e5] disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {clearingTeamId === team.id ? "Clearing..." : "Clear season"}
                       </button>
                       <button
                         type="button"

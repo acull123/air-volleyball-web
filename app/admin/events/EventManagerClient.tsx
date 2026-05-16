@@ -8,7 +8,7 @@ import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
 import { formatEventStatus, getEventStatus } from "@/lib/event-status";
 import { getEventTeamLabel, getEventTeamSchedules } from "@/lib/event-teams";
 import { compareAthletesByName } from "@/lib/player-name";
-import type { EventDocument, EventTeamSchedule } from "@/lib/firebase/schema";
+import type { EventDocument, EventTeamSchedule, GymSpaceDocument, TeamDocument } from "@/lib/firebase/schema";
 
 type EventDraft = {
   type: EventDocument["type"];
@@ -24,6 +24,8 @@ type EventDraft = {
   startHour: string;
   startMinute: string;
   startMeridiem: "AM" | "PM";
+  durationMinutes: string;
+  gymSpaceId: string;
   location: string;
   notes: string;
   active: boolean;
@@ -43,6 +45,8 @@ const emptyDraft: EventDraft = {
   startHour: "6",
   startMinute: "00",
   startMeridiem: "PM",
+  durationMinutes: "90",
+  gymSpaceId: "",
   location: "",
   notes: "",
   active: true,
@@ -115,6 +119,8 @@ function mapEventToDraft(event: EventDocument): EventDraft {
     startHour: parsedTime.startHour,
     startMinute: parsedTime.startMinute,
     startMeridiem: parsedTime.startMeridiem,
+    durationMinutes: String(event.durationMinutes ?? 60),
+    gymSpaceId: event.gymSpaceId ?? "",
     location: event.location,
     notes: event.notes,
     active: event.active,
@@ -162,9 +168,53 @@ function formatEventTypeLabel(type: EventDocument["type"]) {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
+function getGymSpaceLocation(gymSpace: GymSpaceDocument | undefined) {
+  return [gymSpace?.facilityName, gymSpace?.location].filter(Boolean).join(" - ");
+}
+
+function getPracticeTitle(teamSchedules: EventTeamSchedule[], teams: TeamDocument[]) {
+  const teamId = teamSchedules[0]?.teamId;
+  const teamName = teams.find((team) => team.id === teamId)?.name ?? "Team";
+
+  return `Practice ${teamName}`;
+}
+
+function isTournamentType(type: EventDocument["type"]) {
+  return type === "tournament" || type === "twoDayTournament";
+}
+
+function getPracticeEndDate(startDate: string, startTime: string, durationMinutes: number) {
+  const start = new Date(`${startDate}T${startTime || "00:00"}:00`);
+
+  if (!startDate || Number.isNaN(start.getTime())) {
+    return startDate;
+  }
+
+  start.setMinutes(start.getMinutes() + durationMinutes);
+
+  return `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(
+    start.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+function getEndTime(startTime: string, durationMinutes: number) {
+  const [rawHour, rawMinute = "00"] = startTime.split(":");
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+
+  if (Number.isNaN(hour) || Number.isNaN(minute)) {
+    return startTime;
+  }
+
+  return `${String(Math.floor((hour * 60 + minute + durationMinutes) / 60) % 24).padStart(2, "0")}:${String(
+    (hour * 60 + minute + durationMinutes) % 60,
+  ).padStart(2, "0")}`;
+}
+
 export default function EventManagerClient() {
   const events = useFirestoreCollection("events");
   const teams = useFirestoreCollection("teams");
+  const gymSpaces = useFirestoreCollection("gymSpaces");
   const registrations = useFirestoreCollection("registrations");
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -202,6 +252,14 @@ export default function EventManagerClient() {
     });
   }, [events.data, searchTerm, teams.data]);
 
+  const activeGymSpaces = useMemo(
+    () =>
+      [...gymSpaces.data]
+        .filter((gymSpace) => gymSpace.active !== false)
+        .sort((left, right) => left.facilityName.localeCompare(right.facilityName)),
+    [gymSpaces.data],
+  );
+
   function resetForm() {
     setSelectedEventId(null);
     setDraft(emptyDraft);
@@ -223,30 +281,56 @@ export default function EventManagerClient() {
     try {
       const normalizedEndDate = draft.endDate || draft.startDate;
       const startTime = formatStoredTime(draft.startHour, draft.startMinute, draft.startMeridiem);
+      const selectedGymSpace = activeGymSpaces.find((gymSpace) => gymSpace.id === draft.gymSpaceId);
+      const isPractice = draft.type === "practice";
+      const isTournament = isTournamentType(draft.type);
+      const isCamp = draft.type === "camp";
+      const needsGymSpace = isPractice;
+      const durationMinutes = draft.durationMinutes.trim() ? Number(draft.durationMinutes) : 0;
+      const practiceEndDate = getPracticeEndDate(draft.startDate, startTime, durationMinutes);
+      const teamSchedules = isPractice
+        ? draft.teamSchedules.slice(0, 1)
+        : draft.teamSchedules;
       const payload = {
         type: draft.type,
-        title: draft.title.trim(),
-        status: draft.status,
-        teamSchedules: draft.teamSchedules
+        title: isPractice ? getPracticeTitle(teamSchedules, teams.data) : draft.title.trim(),
+        status: isTournament ? draft.status : "none",
+        teamSchedules: teamSchedules
           .map((entry) => ({
             teamId: entry.teamId.trim(),
-            scheduleUrl: entry.scheduleUrl.trim(),
+            scheduleUrl: isPractice ? "" : entry.scheduleUrl.trim(),
           }))
           .filter((entry) => entry.teamId),
-        ageGroup: draft.ageGroup,
-        price: draft.price.trim() ? Number(draft.price) : 0,
-        paymentUrl: draft.paymentUrl.trim(),
-        externalUrl: draft.externalUrl.trim(),
+        ageGroup: isPractice || isTournament ? "" : draft.ageGroup,
+        price: isPractice ? 0 : draft.price.trim() ? Number(draft.price) : 0,
+        paymentUrl: isPractice || isTournament ? "" : draft.paymentUrl.trim(),
+        externalUrl: isPractice || isCamp ? "" : draft.externalUrl.trim(),
         startDate: draft.startDate,
-        endDate: normalizedEndDate,
+        endDate: isPractice ? practiceEndDate : normalizedEndDate,
         startTime,
-        location: draft.location.trim(),
-        notes: draft.notes.trim(),
+        endTime: isPractice ? getEndTime(startTime, durationMinutes) : startTime,
+        durationMinutes: isPractice ? durationMinutes : draft.durationMinutes.trim() ? Number(draft.durationMinutes) : 60,
+        gymSpaceId: isPractice ? draft.gymSpaceId : "",
+        practicePublished: isPractice,
+        location: isPractice && draft.gymSpaceId ? getGymSpaceLocation(selectedGymSpace) : draft.location.trim(),
+        notes: isPractice ? "" : draft.notes.trim(),
         active: draft.active,
       };
 
       if (!payload.title || !payload.startDate || !payload.startTime || !payload.location) {
         throw new Error("Title, start date, start time, and location are required.");
+      }
+
+      if (needsGymSpace && !payload.gymSpaceId) {
+        throw new Error("Gym space is required.");
+      }
+
+      if (isPractice && payload.teamSchedules.length !== 1) {
+        throw new Error("Select one team for the practice.");
+      }
+
+      if (Number.isNaN(payload.durationMinutes) || payload.durationMinutes <= 0) {
+        throw new Error("Duration must be a valid number of minutes.");
       }
 
       if (Number.isNaN(payload.price) || payload.price < 0) {
@@ -330,7 +414,16 @@ export default function EventManagerClient() {
               <select
                 value={draft.type}
                 onChange={(event) =>
-                  setDraft((current) => ({ ...current, type: event.target.value as EventDocument["type"] }))
+                  setDraft((current) => {
+                    const nextType = event.target.value as EventDocument["type"];
+                    const firstTeamSchedule = current.teamSchedules[0];
+
+                    return {
+                      ...current,
+                      type: nextType,
+                      teamSchedules: nextType === "practice" && firstTeamSchedule ? [firstTeamSchedule] : current.teamSchedules,
+                    };
+                  })
                 }
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
               >
@@ -343,23 +436,25 @@ export default function EventManagerClient() {
                 <option value="refScoringClinic">Ref And Scoring Clinic</option>
               </select>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Status
-              <select
-                value={draft.status}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, status: event.target.value as EventDocument["status"] }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="none">None</option>
-                <option value="accepted">Accepted</option>
-                <option value="pending">Pending</option>
-                <option value="waitlisted">Waitlisted</option>
-              </select>
-            </label>
+            {isTournamentType(draft.type) && (
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Status
+                <select
+                  value={draft.status}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, status: event.target.value as EventDocument["status"] }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                >
+                  <option value="none">None</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="pending">Pending</option>
+                  <option value="waitlisted">Waitlisted</option>
+                </select>
+              </label>
+            )}
             <div className="md:col-span-2 flex flex-col gap-3 text-sm font-semibold text-[color:var(--ink)]">
-              Team schedules
+              {draft.type === "practice" ? "Team" : "Team schedules"}
               <div className="space-y-3 rounded-2xl border border-[color:var(--line)] px-4 py-4">
                 {teams.data.length === 0 ? (
                   <p className="text-sm font-normal text-[color:var(--muted)]">No teams have been added yet.</p>
@@ -372,79 +467,102 @@ export default function EventManagerClient() {
                       <div key={team.id} className="grid gap-3 md:grid-cols-[minmax(0,14rem)_1fr] md:items-center">
                         <label className="flex items-center gap-3">
                           <input
-                            type="checkbox"
+                            type={draft.type === "practice" ? "radio" : "checkbox"}
+                            name={draft.type === "practice" ? "practiceTeam" : undefined}
                             checked={isSelected}
-                            onChange={(event) => toggleTeamSchedule(team.id, event.target.checked)}
+                            onChange={(event) => {
+                              if (draft.type === "practice") {
+                                setDraft((current) => ({
+                                  ...current,
+                                  teamSchedules: event.target.checked ? [{ teamId: team.id, scheduleUrl: "" }] : [],
+                                }));
+                                return;
+                              }
+
+                              toggleTeamSchedule(team.id, event.target.checked);
+                            }}
                           />
                           <span>{team.name}</span>
                         </label>
-                        <input
-                          value={teamSchedule?.scheduleUrl ?? ""}
-                          onChange={(event) => updateTeamScheduleUrl(team.id, event.target.value)}
-                          className="rounded-2xl border border-[color:var(--line)] px-4 py-3 disabled:bg-[color:var(--paper)]"
-                          disabled={!isSelected}
-                          placeholder="Team schedule link"
-                        />
+                        {draft.type !== "practice" && (
+                          <input
+                            value={teamSchedule?.scheduleUrl ?? ""}
+                            onChange={(event) => updateTeamScheduleUrl(team.id, event.target.value)}
+                            className="rounded-2xl border border-[color:var(--line)] px-4 py-3 disabled:bg-[color:var(--paper)]"
+                            disabled={!isSelected}
+                            placeholder="Team schedule link"
+                          />
+                        )}
                       </div>
                     );
                   })
                 )}
               </div>
             </div>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Event title <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                value={draft.title}
-                onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Example: President's Day Tournament"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Event fee
-              <input
-                value={draft.price}
-                onChange={(event) => setDraft((current) => ({ ...current, price: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                inputMode="decimal"
-                placeholder="0.00"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Payment link
-              <input
-                value={draft.paymentUrl}
-                onChange={(event) => setDraft((current) => ({ ...current, paymentUrl: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Paste a hosted payment link"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              External link
-              <input
-                value={draft.externalUrl}
-                onChange={(event) => setDraft((current) => ({ ...current, externalUrl: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Paste the outside registration or event page link"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Age group
-              <select
-                value={draft.ageGroup}
-                onChange={(event) => setDraft((current) => ({ ...current, ageGroup: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="">All ages</option>
-                {["12U", "13U", "14U", "15U", "16U", "17U", "18U"].map((ageGroup) => (
-                  <option key={ageGroup} value={ageGroup}>
-                    {ageGroup}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {draft.type !== "practice" && (
+              <>
+                <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  <span>
+                    Event title <span className="text-[#b42318]">*</span>
+                  </span>
+                  <input
+                    value={draft.title}
+                    onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    placeholder="Example: President's Day Tournament"
+                  />
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  Event fee
+                  <input
+                    value={draft.price}
+                    onChange={(event) => setDraft((current) => ({ ...current, price: event.target.value }))}
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                  />
+                </label>
+                {!isTournamentType(draft.type) && (
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Payment link
+                    <input
+                      value={draft.paymentUrl}
+                      onChange={(event) => setDraft((current) => ({ ...current, paymentUrl: event.target.value }))}
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      placeholder="Paste a hosted payment link"
+                    />
+                  </label>
+                )}
+                {draft.type !== "camp" && (
+                  <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    External link
+                    <input
+                      value={draft.externalUrl}
+                      onChange={(event) => setDraft((current) => ({ ...current, externalUrl: event.target.value }))}
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      placeholder="Paste the outside registration or event page link"
+                    />
+                  </label>
+                )}
+                {!isTournamentType(draft.type) && (
+                  <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Age group
+                    <select
+                      value={draft.ageGroup}
+                      onChange={(event) => setDraft((current) => ({ ...current, ageGroup: event.target.value }))}
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    >
+                      <option value="">All ages</option>
+                      {["12U", "13U", "14U", "15U", "16U", "17U", "18U"].map((ageGroup) => (
+                        <option key={ageGroup} value={ageGroup}>
+                          {ageGroup}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+              </>
+            )}
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               <span>
                 Start date <span className="text-[#b42318]">*</span>
@@ -463,6 +581,7 @@ export default function EventManagerClient() {
                 onChange={(event) => setDraft((current) => ({ ...current, endDate: event.target.value }))}
                 className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                 type="date"
+                disabled={draft.type === "practice"}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
@@ -507,26 +626,70 @@ export default function EventManagerClient() {
                 </select>
               </div>
             </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Location <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                value={draft.location}
-                onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Facility or venue"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Notes
-              <textarea
-                value={draft.notes}
-                onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-                className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Add travel notes, bracket details, or arrival reminders."
-              />
-            </label>
+            {draft.type === "practice" && (
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Duration minutes <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  value={draft.durationMinutes}
+                  onChange={(event) => setDraft((current) => ({ ...current, durationMinutes: event.target.value }))}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  inputMode="numeric"
+                  placeholder="90"
+                />
+              </label>
+            )}
+            {draft.type === "practice" && (
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Gym space <span className="text-[#b42318]">*</span>
+                </span>
+                <select
+                  value={draft.gymSpaceId}
+                  onChange={(event) => {
+                    const gymSpaceId = event.target.value;
+                    const gymSpace = activeGymSpaces.find((entry) => entry.id === gymSpaceId);
+
+                    setDraft((current) => ({
+                      ...current,
+                      gymSpaceId,
+                      location: gymSpaceId ? getGymSpaceLocation(gymSpace) : current.location,
+                    }));
+                  }}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                >
+                  <option value="">Select gym space</option>
+                  {activeGymSpaces.map((gymSpace) => (
+                    <option key={gymSpace.id} value={gymSpace.id}>
+                      {getGymSpaceLocation(gymSpace)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {draft.type !== "practice" && (
+              <>
+                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  Location
+                  <input
+                    value={draft.location}
+                    onChange={(event) => setDraft((current) => ({ ...current, location: event.target.value }))}
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    placeholder="Facility or venue"
+                  />
+                </label>
+                <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  Notes
+                  <textarea
+                    value={draft.notes}
+                    onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+                    className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    placeholder="Add travel notes, bracket details, or arrival reminders."
+                  />
+                </label>
+              </>
+            )}
             <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
               <input
                 type="checkbox"

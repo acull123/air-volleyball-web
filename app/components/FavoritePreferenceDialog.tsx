@@ -45,7 +45,7 @@ export default function FavoritePreferenceDialog({
     }
 
     return sortedTeams.filter((team) =>
-      [team.name, team.ageGroup, team.season, team.level].join(" ").toLowerCase().includes(normalizedSearch),
+      [team.name, team.ageGroup, team.season].join(" ").toLowerCase().includes(normalizedSearch),
     );
   }, [teamSearch, teams]);
 
@@ -113,7 +113,7 @@ export default function FavoritePreferenceDialog({
                   value={teamSearch}
                   onChange={(event) => setTeamSearch(event.target.value)}
                   className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  placeholder="Search by team name, age group, season, or level"
+                  placeholder="Search by team name, age group, or season"
                 />
               </label>
               <div className="max-h-[18rem] space-y-3 overflow-y-auto pr-2 sm:max-h-[22rem]">
@@ -139,7 +139,7 @@ export default function FavoritePreferenceDialog({
                     >
                       <p className="text-lg font-bold text-[color:var(--ink)]">{team.name}</p>
                       <p className="mt-1 text-sm text-[color:var(--muted)]">
-                        {[team.ageGroup, team.season, team.level].filter(Boolean).join(" · ") || "Team details coming soon"}
+                        {[team.ageGroup, team.season].filter(Boolean).join(" · ") || "Team details coming soon"}
                       </p>
                     </button>
                   );

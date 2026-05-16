@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getEventByIdServer } from "@/lib/firebase/server";
 import { createPayPalOrder } from "@/lib/paypal";
 
+export const runtime = "nodejs";
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { eventId?: string };
@@ -17,7 +19,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "This event is not available for registration." }, { status: 400 });
     }
 
-    if (!event.price || event.price <= 0) {
+    if (!Number.isFinite(event.price) || !event.price || event.price <= 0) {
       return NextResponse.json({ error: "This event does not require payment." }, { status: 400 });
     }
 

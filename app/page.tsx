@@ -52,7 +52,7 @@ function buildEventCardItem(event: EventDocument): Event {
             : event.type,
     description: event.notes,
     startsAt: `${event.startDate}T${event.startTime || "00:00"}`,
-    endsAt: `${event.endDate || event.startDate}T${event.startTime || "00:00"}`,
+    endsAt: `${event.endDate || event.startDate}T${event.endTime || event.startTime || "00:00"}`,
     teamIds: getEventTeamIds(event),
     coachIds: [],
     playerIds: [],
@@ -176,6 +176,20 @@ function getAgeGroupForPlayer(player: PlayerDocument, event: EventDocument, team
   return `${Math.max(10, Math.min(age, 18))}U`;
 }
 
+function toDateKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(
+    2,
+    "0",
+  )}`;
+}
+
+function isCurrentOrFutureEvent(event: EventDocument) {
+  const todayKey = toDateKey(new Date());
+  const eventEndDate = event.endDate || event.startDate;
+
+  return !eventEndDate || eventEndDate >= todayKey;
+}
+
 function getEventAgeGroup(event: EventDocument) {
   return event.ageGroup || (event as EventDocument & { ageGroups?: string[] }).ageGroups?.[0] || "";
 }
@@ -204,6 +218,7 @@ export default function HomePage() {
   const upcomingEvents = useMemo<Event[]>(() => {
     return [...events.data]
       .filter((event) => event.active !== false)
+      .filter(isCurrentOrFutureEvent)
       .filter((event) => event.type !== "areaCamp")
       .sort((a, b) => {
         const left = new Date(`${a.startDate}T${a.startTime || "00:00"}`).getTime();
@@ -241,6 +256,7 @@ export default function HomePage() {
 
     const recommendedEvents = events.data
       .filter((event) => event.active !== false)
+      .filter(isCurrentOrFutureEvent)
       .filter((event) => event.type !== "areaCamp")
       .filter((event) => {
         const eventTeamIds = getEventTeamIds(event);

@@ -1,6 +1,6 @@
 import PageHero from "@/app/components/PageHero";
-import SectionCard from "@/app/components/SectionCard";
 import StaffAccessGate from "../scheduling/StaffAccessGate";
+import PracticePlanningClient from "./PracticePlanningClient";
 
 export default function AdminPracticePlanningPage() {
   return (
@@ -17,22 +17,7 @@ export default function AdminPracticePlanningPage() {
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        <SectionCard title="What This Will Manage" kicker="Scheduling">
-          <div className="space-y-4 text-sm leading-7 text-[color:var(--muted)]">
-            <p>Sessions per week for each team.</p>
-            <p>Practice length, preferred days, and preferred time windows.</p>
-            <p>Suggested practice slots before the final schedule is published.</p>
-          </div>
-        </SectionCard>
-
-        <SectionCard title="Next Build Step" kicker="Coming Next">
-          <p className="text-sm leading-7 text-[color:var(--muted)]">
-            The next pass will add team scheduling rules and a ranked list of suggested practice
-            slots based on gym availability and submitted conflicts.
-          </p>
-        </SectionCard>
-      </div>
+      <PracticePlanningClient />
     </StaffAccessGate>
   );
 }

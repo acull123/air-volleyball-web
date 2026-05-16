@@ -353,7 +353,7 @@ export default function ConflictManagerClient() {
                     <div className="space-y-1">
                       <p className="text-lg font-bold text-[color:var(--ink)]">{conflict.playerName}</p>
                       <p className="text-sm text-[color:var(--muted)]">
-                        {teamName}
+                        Team: {teamName}
                         {player?.position ? ` · ${player.position}` : ""}
                       </p>
                       <p className="text-sm text-[color:var(--muted)]">

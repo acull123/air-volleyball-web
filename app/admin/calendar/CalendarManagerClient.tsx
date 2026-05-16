@@ -10,8 +10,37 @@ export default function CalendarManagerClient() {
   const teams = useFirestoreCollection("teams");
   const conflicts = useFirestoreCollection("conflicts");
 
+  function getEndTime(startTime: string, durationMinutes: number) {
+    const [rawHour, rawMinute = "00"] = startTime.split(":");
+    const hour = Number(rawHour);
+    const minute = Number(rawMinute);
+
+    if (Number.isNaN(hour) || Number.isNaN(minute)) {
+      return startTime;
+    }
+
+    const totalMinutes = hour * 60 + minute + durationMinutes;
+    return `${String(Math.floor(totalMinutes / 60) % 24).padStart(2, "0")}:${String(totalMinutes % 60).padStart(2, "0")}`;
+  }
+
   async function updateEventTime(eventId: string, startTime: string) {
-    await firestoreApi.events.update(eventId, { startTime });
+    const event = events.data.find((entry) => entry.id === eventId);
+
+    await firestoreApi.events.update(eventId, {
+      startTime,
+      endTime:
+        event?.type === "practice"
+          ? getEndTime(startTime, Math.max(15, event.durationMinutes || 60))
+          : event?.endTime || startTime,
+    });
+  }
+
+  async function updateEventDate(eventId: string, startDate: string, endDate: string) {
+    await firestoreApi.events.update(eventId, { startDate, endDate });
+  }
+
+  async function deleteEvent(eventId: string) {
+    await firestoreApi.events.remove(eventId);
   }
 
   const loading = events.loading || teams.loading || conflicts.loading;
@@ -42,6 +71,8 @@ export default function CalendarManagerClient() {
           conflicts={conflicts.data}
           loading={loading}
           onEventTimeSave={updateEventTime}
+          onEventDateSave={updateEventDate}
+          onEventDelete={deleteEvent}
         />
       )}
     </>

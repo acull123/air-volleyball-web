@@ -1,6 +1,6 @@
 import StaffAccessGate from "../scheduling/StaffAccessGate";
 import PageHero from "@/app/components/PageHero";
-import SectionCard from "@/app/components/SectionCard";
+import WhereWeAreDashboardClient from "./WhereWeAreDashboardClient";
 
 export default function AdminDashboardsPage() {
   return (
@@ -13,14 +13,10 @@ export default function AdminDashboardsPage() {
       <PageHero
         eyebrow="Dashboards"
         title="Where we are"
-        description="Dashboard views will live here in a later pass."
+        description="Review tournament days and see which teams are playing in each tournament."
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
-      <SectionCard title="Where we are" kicker="Placeholder">
-        <p className="text-sm leading-7 text-[color:var(--muted)]">
-          Dashboard tools will be added here next.
-        </p>
-      </SectionCard>
+      <WhereWeAreDashboardClient />
     </StaffAccessGate>
   );
 }

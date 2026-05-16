@@ -98,58 +98,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
         </div>
       </SectionCard>
 
-      {isAdmin && (
-        <SectionCard title="Account Management" kicker="User Access">
-          <div className="grid gap-5 lg:grid-cols-3">
-            <Link
-              href="/admin/users"
-              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
-            >
-              <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Edit accounts</h2>
-              <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-                Review self-created accounts, update roles, link coaches, and mark accounts inactive.
-              </p>
-              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-                Open account editor
-              </div>
-            </Link>
-          </div>
-        </SectionCard>
-      )}
-
-      <SectionCard title="Finances" kicker="Expense Tracking">
-        <div className="grid gap-5 lg:grid-cols-3">
-          <Link
-            href="/admin/finances/expense-reports"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
-          >
-            <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Expense reports</h2>
-            <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-              {isAdmin
-                ? "Review coach expense reports and accept, reject, or pay pending submissions."
-                : "Submit expense reports and review the status of your submissions."}
-            </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open expense reports
-            </div>
-          </Link>
-          {isAdmin && (
-            <Link
-              href="/admin/finances/pay-setup"
-              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
-            >
-              <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Pay setup</h2>
-              <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-                Manage pay types, default coach assignments, and event type matching.
-              </p>
-              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-                Open pay setup
-              </div>
-            </Link>
-          )}
-        </div>
-      </SectionCard>
-
       <SectionCard title="Scheduling" kicker="Planning Tools">
         <div className="grid gap-5 lg:grid-cols-4">
           <Link
@@ -219,6 +167,39 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
         </div>
       </SectionCard>
 
+      <SectionCard title="Finances" kicker="Expense Tracking">
+        <div className="grid gap-5 lg:grid-cols-3">
+          <Link
+            href="/admin/finances/expense-reports"
+            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+          >
+            <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Expense reports</h2>
+            <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+              {isAdmin
+                ? "Review coach expense reports and accept, reject, or pay pending submissions."
+                : "Submit expense reports and review the status of your submissions."}
+            </p>
+            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
+              Open expense reports
+            </div>
+          </Link>
+          {isAdmin && (
+            <Link
+              href="/admin/finances/pay-setup"
+              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            >
+              <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Pay setup</h2>
+              <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                Manage pay types, default coach assignments, and event type matching.
+              </p>
+              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
+                Open pay setup
+              </div>
+            </Link>
+          )}
+        </div>
+      </SectionCard>
+
       <SectionCard title="Dashboards" kicker="Club View">
         <div className="grid gap-5 lg:grid-cols-3">
           <Link
@@ -235,6 +216,25 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
           </Link>
         </div>
       </SectionCard>
+
+      {isAdmin && (
+        <SectionCard title="Account Management" kicker="User Access">
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Link
+              href="/admin/users"
+              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            >
+              <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Edit accounts</h2>
+              <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                Review self-created accounts, update roles, link coaches, and mark accounts inactive.
+              </p>
+              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
+                Open account editor
+              </div>
+            </Link>
+          </div>
+        </SectionCard>
+      )}
     </>
   );
 }
