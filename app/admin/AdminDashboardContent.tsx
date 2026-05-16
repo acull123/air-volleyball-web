@@ -10,6 +10,9 @@ type AdminDashboardContentProps = {
   role: UserRole;
 };
 
+const clickableCardClass =
+  "group rounded-[1.75rem] border border-[color:var(--line)] !border-[#b8dcff] bg-[color:var(--paper)] px-5 py-5 transition hover:!border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]";
+
 export default function AdminDashboardContent({ role }: AdminDashboardContentProps) {
   const isAdmin = role === "admin";
 
@@ -29,7 +32,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
         <div className="grid gap-5 lg:grid-cols-3">
           <Link
             href="/admin/players"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Manage players</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -42,7 +45,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
 
           <Link
             href="/admin/teams"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Manage teams</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -55,7 +58,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
 
           <Link
             href="/admin/coaches"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Manage coaches</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -71,7 +74,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
               <Link
                 key={task.id}
                 href="/admin/registrations"
-                className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+                className={clickableCardClass}
               >
                 <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">{task.title}</h2>
                 <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">{task.detail}</p>
@@ -102,7 +105,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
         <div className="grid gap-5 lg:grid-cols-4">
           <Link
             href="/admin/calendar"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Club calendar</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -115,7 +118,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
 
           <Link
             href="/admin/events"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Manage events</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -128,7 +131,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
 
           <Link
             href="/admin/gym-spaces"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Manage gym spaces</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -141,7 +144,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
 
           <Link
             href="/admin/conflicts"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Review conflicts</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -154,7 +157,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
 
           <Link
             href="/admin/practice-planning"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Practice planning</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -171,7 +174,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
         <div className="grid gap-5 lg:grid-cols-3">
           <Link
             href="/admin/finances/expense-reports"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Expense reports</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -186,7 +189,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
           {isAdmin && (
             <Link
               href="/admin/finances/pay-setup"
-              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+              className={clickableCardClass}
             >
               <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Pay setup</h2>
               <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -204,7 +207,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
         <div className="grid gap-5 lg:grid-cols-3">
           <Link
             href="/admin/dashboards"
-            className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+            className={clickableCardClass}
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Where we are</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
@@ -222,7 +225,7 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
           <div className="grid gap-5 lg:grid-cols-3">
             <Link
               href="/admin/users"
-              className="group rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+              className={clickableCardClass}
             >
               <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Edit accounts</h2>
               <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">

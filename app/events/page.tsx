@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { formatEventStatus, getEventStatus, shouldShowEventStatus } from "@/lib/event-status";
@@ -9,6 +9,22 @@ import { getEventTeamSchedules } from "@/lib/event-teams";
 import { useFirestoreDocument, useFirestoreCollection } from "@/lib/firebase";
 import type { EventDocument } from "@/lib/firebase/schema";
 import { toExternalHref } from "@/lib/url";
+
+function getEventIdFromLocation() {
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  const searchParam = new URLSearchParams(window.location.search).get("eventId");
+
+  if (searchParam) {
+    return searchParam;
+  }
+
+  const [, eventsSegment, eventId] = window.location.pathname.split("/");
+
+  return eventsSegment === "events" ? eventId ?? "" : "";
+}
 
 function formatDateRange(startDate: string, endDate: string) {
   if (!startDate) {
@@ -81,8 +97,12 @@ function formatEventType(type: EventDocument["type"]) {
 }
 
 export default function EventDetailsPage() {
-  const params = useParams<{ eventId: string }>();
-  const eventId = typeof params?.eventId === "string" ? params.eventId : "";
+  const [eventId, setEventId] = useState("");
+
+  useEffect(() => {
+    setEventId(getEventIdFromLocation());
+  }, []);
+
   const event = useFirestoreDocument("events", eventId, { enabled: Boolean(eventId) });
   const teams = useFirestoreCollection("teams");
 
@@ -102,7 +122,11 @@ export default function EventDetailsPage() {
       />
 
       <SectionCard title={event.data?.title || "Event Information"} kicker="Event Details">
-        {event.loading || teams.loading ? (
+        {!eventId ? (
+          <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
+            Event details are unavailable right now.
+          </div>
+        ) : event.loading || teams.loading ? (
           <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
             Loading event details...
           </div>
@@ -180,9 +204,7 @@ export default function EventDetailsPage() {
             </div>
 
             <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
-              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                Next Step
-              </p>
+              <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">Next Step</p>
               <div className="mt-4 flex flex-col gap-3">
                 {(event.data.type === "camp" || event.data.type === "tryout") && (
                   <Link

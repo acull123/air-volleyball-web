@@ -8,6 +8,12 @@
   "hosting": {
     "public": "out",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/events/**",
+        "destination": "/events.html"
+      }
+    ],
     "cleanUrls": true,
     "trailingSlash": false
   }

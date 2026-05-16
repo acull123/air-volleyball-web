@@ -760,7 +760,7 @@ export default function TeamManagerClient() {
                         type="button"
                         disabled={clearingTeamId === team.id}
                         onClick={() => void handleClearTeamSeason(team)}
-                        className="rounded-full border border-[#e4c47d] px-4 py-2 text-sm font-semibold text-[#7a4b00] transition hover:bg-[#fff8e5] disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {clearingTeamId === team.id ? "Clearing..." : "Clear season"}
                       </button>

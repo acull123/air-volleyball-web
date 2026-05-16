@@ -9,6 +9,7 @@ import SectionCard from "./components/SectionCard";
 import { getEventStatus } from "@/lib/event-status";
 import { getEventTeamIds } from "@/lib/event-teams";
 import { useFirestoreCollection } from "@/lib/firebase";
+import { useAuthSession } from "@/lib/firebase/auth";
 import type { Event } from "./types/models";
 import type { EventDocument, PlayerDocument, TeamDocument } from "@/lib/firebase/schema";
 import { isCurrentPlayer } from "@/lib/player-status";
@@ -23,6 +24,7 @@ type FavoritePreference = {
 
 const scheelsLogoUrl =
   "https://res.cloudinary.com/dlwdq84ig/image/upload/w_3840%2Cq_auto%2Cc_scale/x1qgcm5jcooqwptm0kbq";
+const homeCardBorder = "border border-[#b8dcff]";
 
 function getEventHref(event: EventDocument) {
   if (event.type === "camp" || event.type === "tryout") {
@@ -33,7 +35,7 @@ function getEventHref(event: EventDocument) {
     return "/about#ref-scoring-clinic";
   }
 
-  return `/events/${event.id}`;
+  return `/events?eventId=${event.id}`;
 }
 
 function buildEventCardItem(event: EventDocument): Event {
@@ -195,6 +197,7 @@ function getEventAgeGroup(event: EventDocument) {
 }
 
 export default function HomePage() {
+  const access = useAuthSession();
   const clientReady = useSyncExternalStore(
     subscribeToHydration,
     getClientReadySnapshot,
@@ -210,10 +213,23 @@ export default function HomePage() {
   const favoritePreference = clientReady
     ? favoritePreferenceOverride ?? readFavoritePreferenceCookie()
     : favoritePreferenceOverride;
+  const linkedPlayerIds = useMemo(
+    () => Array.from(new Set(access.authUser?.profile?.playerIds?.filter(Boolean) ?? [])),
+    [access.authUser?.profile?.playerIds],
+  );
+  const linkedPreference =
+    linkedPlayerIds.length > 0 ? { teamIds: [] as string[], playerIds: linkedPlayerIds } : null;
+  const recommendationPreference = linkedPreference ?? favoritePreference;
+  const recommendationSource = linkedPreference ? "linkedPlayers" : favoritePreference ? "favorites" : "none";
   const promptDismissed = clientReady && getCookie(favoritePreferenceDismissedCookieName) === "1";
   const favoriteDialogOpen =
     favoriteDialogForcedOpen ||
-    (clientReady && !favoritePreference && !promptDismissed && !favoriteDialogDismissed);
+    (clientReady &&
+      !access.loading &&
+      !linkedPreference &&
+      !favoritePreference &&
+      !promptDismissed &&
+      !favoriteDialogDismissed);
 
   const upcomingEvents = useMemo<Event[]>(() => {
     return [...events.data]
@@ -231,20 +247,20 @@ export default function HomePage() {
 
   const recommendedState = useMemo(() => {
     if (
-      !favoritePreference ||
-      (favoritePreference.teamIds.length === 0 && favoritePreference.playerIds.length === 0)
+      !recommendationPreference ||
+      (recommendationPreference.teamIds.length === 0 && recommendationPreference.playerIds.length === 0)
     ) {
       return {
         title: "",
         events: [] as Event[],
       };
     }
-    const favoriteTeams = teams.data.filter((team) => favoritePreference.teamIds.includes(team.id));
+    const favoriteTeams = teams.data.filter((team) => recommendationPreference.teamIds.includes(team.id));
     const favoritePlayers = players.data.filter(
-      (player) => isCurrentPlayer(player) && favoritePreference.playerIds.includes(player.id),
+      (player) => isCurrentPlayer(player) && recommendationPreference.playerIds.includes(player.id),
     );
     const relatedTeamIds = new Set<string>([
-      ...favoritePreference.teamIds,
+      ...recommendationPreference.teamIds,
       ...favoritePlayers.map((player) => player.teamId).filter(Boolean),
     ]);
     const relatedAgeGroups = new Set<string>([
@@ -284,10 +300,13 @@ export default function HomePage() {
       .map(buildEventCardItem);
 
     return {
-      title: "Recommended For Your Favorites",
+      title:
+        recommendationSource === "linkedPlayers"
+          ? "Recommended For Your Linked Players"
+          : "Recommended For Your Favorites",
       events: recommendedEvents,
     };
-  }, [events.data, favoritePreference, players.data, teams.data]);
+  }, [events.data, players.data, recommendationPreference, recommendationSource, teams.data]);
 
   const summary = useMemo(
     () => ({
@@ -340,21 +359,23 @@ export default function HomePage() {
         ]}
       />
 
-      {favoritePreference && (
+      {recommendationPreference && (
         <SectionCard
           title={recommendedState.title}
           kicker="Recommended Events"
           headerAction={
-            <button
-              type="button"
-              onClick={() => {
-                setFavoriteDialogDismissed(false);
-                setFavoriteDialogForcedOpen(true);
-              }}
-              className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-            >
-              Change Favorite
-            </button>
+            recommendationSource === "favorites" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFavoriteDialogDismissed(false);
+                  setFavoriteDialogForcedOpen(true);
+                }}
+                className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+              >
+                Change Favorite
+              </button>
+            ) : null
           }
         >
           {recommendedState.events.length === 0 ? (
@@ -395,7 +416,7 @@ export default function HomePage() {
 
       <SectionCard title="Club Snapshot" kicker="Live Overview">
         <div className="grid gap-4 md:grid-cols-3">
-          <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
+          <div className={`rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5`}>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
               Active Teams
             </p>
@@ -403,7 +424,7 @@ export default function HomePage() {
               {summary.teams}
             </p>
           </div>
-          <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
+          <div className={`rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5`}>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
               Active Players
             </p>
@@ -411,7 +432,7 @@ export default function HomePage() {
               {summary.players}
             </p>
           </div>
-          <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
+          <div className={`rounded-[1.5rem] ${homeCardBorder} bg-[color:var(--paper)] px-5 py-5`}>
             <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
               Active Coaches
             </p>
@@ -422,7 +443,7 @@ export default function HomePage() {
         </div>
       </SectionCard>
 
-      <section className="rounded-full border border-[color:var(--line)] bg-white/90 px-5 py-4 shadow-[0_18px_40px_rgba(17,58,98,0.08)]">
+      <section className={`rounded-full ${homeCardBorder} bg-white/90 px-5 py-4 shadow-[0_18px_40px_rgba(17,58,98,0.08)]`}>
         <div className="flex flex-col items-center gap-4 text-center md:flex-row md:items-center md:justify-start md:text-left">
           <div className="md:min-w-[20rem]">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import type { PlayerDocument, TeamDocument } from "@/lib/firebase/schema";
 import { comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
@@ -20,6 +21,9 @@ type FavoritePreferenceDialogProps = {
   onSkip: () => void;
 };
 
+const popupActionClass =
+  "inline-flex justify-center rounded-full border border-[#b8dcff] bg-[color:var(--paper)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white";
+
 export default function FavoritePreferenceDialog({
   open,
   players,
@@ -33,6 +37,16 @@ export default function FavoritePreferenceDialog({
   const [playerSearch, setPlayerSearch] = useState("");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>(value.teamIds);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>(value.playerIds);
+  const hasSavedPreference = value.teamIds.length > 0 || value.playerIds.length > 0;
+  const [showPicker, setShowPicker] = useState(hasSavedPreference);
+
+  useEffect(() => {
+    if (open) {
+      setShowPicker(hasSavedPreference);
+      setSelectedTeamIds(value.teamIds);
+      setSelectedPlayerIds(value.playerIds);
+    }
+  }, [hasSavedPreference, open, value.playerIds, value.teamIds]);
 
   const filteredTeams = useMemo(() => {
     const normalizedSearch = teamSearch.trim().toLowerCase();
@@ -73,6 +87,65 @@ export default function FavoritePreferenceDialog({
 
   const hasSelection = selectedTeamIds.length > 0 || selectedPlayerIds.length > 0;
 
+  if (!showPicker) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto bg-[rgba(9,24,45,0.65)] px-4 py-4 sm:py-8">
+        <div className="flex min-h-full items-center justify-center">
+          <div className="w-full max-w-2xl overflow-hidden rounded-[2rem] border border-[color:var(--line)] bg-white shadow-[0_30px_80px_rgba(8,23,45,0.28)]">
+            <div className="px-5 py-6 lg:px-8 lg:py-8">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-[color:var(--muted)]">
+                    Welcome
+                  </p>
+                  <h2 className="mt-2 text-3xl font-bold text-[color:var(--ink)] sm:text-4xl">
+                    Welcome To Air Volleyball
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                >
+                  Close
+                </button>
+              </div>
+
+              <p className="mt-5 text-sm leading-7 text-[color:var(--muted)] sm:text-base">
+                Tell us which players or teams matter to your family so the website can highlight relevant events,
+                registration links, schedules, and updates. Signing in is the best option because your linked players
+                can personalize the site automatically.
+              </p>
+
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <Link
+                  href="/login"
+                  className={popupActionClass}
+                >
+                  Sign In Or Create Account
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setShowPicker(true)}
+                  className={popupActionClass}
+                >
+                  Pick Favorites For Now
+                </button>
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  className="inline-flex justify-center rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                >
+                  Skip For Now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[rgba(9,24,45,0.65)] px-4 py-4 sm:py-8">
       <div className="flex min-h-full items-start justify-center">
@@ -86,8 +159,14 @@ export default function FavoritePreferenceDialog({
               Pick Favorite Teams And Players
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-7 text-[color:var(--muted)]">
-              Save your favorite teams and players so the home page can highlight the most relevant events for your family.
+              Save your favorite teams and players so the website can highlight the most relevant events for your family.
             </p>
+            <Link
+              href="/login"
+              className="mt-4 inline-flex rounded-full border border-[#b8dcff] bg-[color:var(--paper)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white"
+            >
+              Sign In Or Create Account
+            </Link>
           </div>
           <button
             type="button"

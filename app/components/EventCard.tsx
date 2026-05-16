@@ -31,7 +31,7 @@ export default function EventCard({
     <article
       className={`group flex h-full cursor-pointer flex-col rounded-[1.75rem] border border-[color:var(--line)] px-5 py-5 transition ${
         isHomeVariant
-          ? "bg-white hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+          ? "!border-[#b8dcff] bg-[color:var(--paper)] hover:!border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
           : "bg-white hover:bg-[color:var(--paper)]"
       }`}
       onClick={onClick}

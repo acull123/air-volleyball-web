@@ -159,7 +159,7 @@ export default function TrainingPage() {
                 <Link
                   key={camp.id}
                   href={`/register?event=${camp.id}`}
-                  className="group flex h-full cursor-pointer flex-col rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+                  className="group flex h-full cursor-pointer flex-col rounded-[1.75rem] border border-[color:var(--line)] !border-[#b8dcff] bg-[color:var(--paper)] px-5 py-5 transition hover:!border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
                 >
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
                     {camp.ageGroup || "All ages"}
@@ -214,7 +214,7 @@ export default function TrainingPage() {
                     href={toExternalHref(camp.externalUrl)}
                     target="_blank"
                     rel="noreferrer"
-                    className="group flex h-full cursor-pointer flex-col rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5 transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
+                    className="group flex h-full cursor-pointer flex-col rounded-[1.75rem] border border-[color:var(--line)] !border-[#b8dcff] bg-[color:var(--paper)] px-5 py-5 transition hover:!border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]"
                   >
                     <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
                       {camp.ageGroup || "All ages"}
@@ -241,7 +241,7 @@ export default function TrainingPage() {
                 ) : (
                   <div
                     key={camp.id}
-                    className="rounded-[1.75rem] border border-[color:var(--line)] bg-white px-5 py-5"
+                    className="rounded-[1.75rem] border border-[color:var(--line)] !border-[#b8dcff] bg-[color:var(--paper)] px-5 py-5"
                   >
                     <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
                       {camp.ageGroup || "All ages"}

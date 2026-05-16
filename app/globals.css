@@ -2,13 +2,13 @@
 
 :root {
   color-scheme: light;
-  --paper: #f6f1e8;
-  --paper-strong: #efe5d4;
+  --paper: #eef7ff;
+  --paper-strong: #dcecff;
   --ink: #0f2846;
   --muted: #557089;
   --line: rgba(17, 58, 98, 0.12);
   --accent: #f5a623;
-  --accent-soft: rgba(245, 166, 35, 0.16);
+  --accent-soft: rgba(74, 144, 226, 0.14);
 }
 
 * {
@@ -21,9 +21,9 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   background:
-    radial-gradient(circle at top left, rgba(245, 166, 35, 0.24), transparent 24%),
+    radial-gradient(circle at top left, rgba(116, 181, 255, 0.24), transparent 24%),
     radial-gradient(circle at top right, rgba(17, 58, 98, 0.12), transparent 26%),
-    linear-gradient(180deg, #fbf8f1 0%, #f5eee0 100%);
+    linear-gradient(180deg, #f7fbff 0%, #eaf4ff 100%);
   color: var(--ink);
   font-family: var(--font-body), sans-serif;
 }
@@ -46,5 +46,5 @@ a {
   pointer-events: none;
   background:
     linear-gradient(140deg, rgba(17, 58, 98, 0.05) 0%, transparent 30%),
-    linear-gradient(320deg, rgba(245, 166, 35, 0.06) 0%, transparent 28%);
+    linear-gradient(320deg, rgba(74, 144, 226, 0.08) 0%, transparent 28%);
 }
