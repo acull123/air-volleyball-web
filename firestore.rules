@@ -65,7 +65,8 @@ service cloud.firestore {
 
     match /players/{playerId} {
       allow read: if true;
-      allow write: if isStaff();
+      allow create: if isSignedIn();
+      allow update, delete: if isStaff();
     }
 
     match /teams/{teamId} {
@@ -114,7 +115,8 @@ service cloud.firestore {
     }
 
     match /registrations/{registrationId} {
-      allow create: if true;
+      allow create: if isSignedIn()
+        && request.resource.data.playerId in currentUserDoc().data.playerIds;
       allow read: if isStaff()
         || (
           isSignedIn()
@@ -125,7 +127,11 @@ service cloud.firestore {
 
     match /invoices/{invoiceId} {
       allow read: if isAdmin()
-        || (isSignedIn() && resource.data.userId == request.auth.uid);
+        || (isSignedIn() && resource.data.userId == request.auth.uid)
+        || (
+          isSignedIn()
+          && resource.data.playerId in currentUserDoc().data.playerIds
+        );
       allow write: if isAdmin();
     }
 

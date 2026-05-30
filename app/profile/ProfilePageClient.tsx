@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import PageHero from "../components/PageHero";
 import SectionCard from "../components/SectionCard";
 import { signOutUser, updateUserProfileFields, useAuthSession } from "@/lib/firebase/auth";
+import { getFriendlyFirebaseError } from "@/lib/firebase/errors";
 
 export default function ProfilePageClient() {
   const access = useAuthSession();
@@ -44,7 +45,7 @@ export default function ProfilePageClient() {
       setDraft({});
       setStatus("Profile updated.");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to update profile.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to update profile."));
     } finally {
       setSaving(false);
     }

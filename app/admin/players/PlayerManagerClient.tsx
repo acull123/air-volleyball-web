@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { comparePlayersByName } from "@/lib/player-name";
 import { compareTeamsByAge } from "@/lib/team-sort";
 import type { PlayerDocument } from "@/lib/firebase/schema";
@@ -16,6 +16,19 @@ type PlayerDraft = {
   lastName: string;
   birthDate: string;
   school: string;
+  shirtSize: string;
+  email: string;
+  grade: string;
+  guardianFirstName: string;
+  guardianLastName: string;
+  guardianEmail: string;
+  phone: string;
+  guardianPhone: string;
+  addressStreet: string;
+  addressCity: string;
+  addressState: string;
+  addressZip: string;
+  medications: string;
   college: string;
   position: string;
   jerseyNumber: string;
@@ -31,6 +44,19 @@ const emptyDraft: PlayerDraft = {
   lastName: "",
   birthDate: "",
   school: "",
+  shirtSize: "",
+  email: "",
+  grade: "",
+  guardianFirstName: "",
+  guardianLastName: "",
+  guardianEmail: "",
+  phone: "",
+  guardianPhone: "",
+  addressStreet: "",
+  addressCity: "",
+  addressState: "",
+  addressZip: "",
+  medications: "",
   college: "",
   position: "",
   jerseyNumber: "",
@@ -47,6 +73,20 @@ function mapPlayerToDraft(player: PlayerDocument): PlayerDraft {
     lastName: player.lastName,
     birthDate: player.birthDate ?? "",
     school: player.school ?? "",
+    shirtSize: player.shirtSize ?? "",
+    email: player.email ?? "",
+    grade: player.grade ?? "",
+    guardianFirstName:
+      player.guardianFirstName ?? (player as PlayerDocument & { guardianName?: string }).guardianName ?? "",
+    guardianLastName: player.guardianLastName ?? "",
+    guardianEmail: player.guardianEmail ?? "",
+    phone: player.phone ?? "",
+    guardianPhone: player.guardianPhone ?? "",
+    addressStreet: player.addressStreet ?? "",
+    addressCity: player.addressCity ?? "",
+    addressState: player.addressState ?? "",
+    addressZip: player.addressZip ?? "",
+    medications: player.medications ?? "",
     college: player.college ?? "",
     position: player.position,
     jerseyNumber: String(player.jerseyNumber),
@@ -201,6 +241,19 @@ export default function PlayerManagerClient() {
         lastName: draft.lastName.trim(),
         birthDate: draft.birthDate,
         school: draft.school.trim(),
+        shirtSize: draft.shirtSize.trim(),
+        email: draft.email.trim(),
+        grade: draft.grade.trim(),
+        guardianFirstName: draft.guardianFirstName.trim(),
+        guardianLastName: draft.guardianLastName.trim(),
+        guardianEmail: draft.guardianEmail.trim(),
+        phone: draft.phone.trim(),
+        guardianPhone: draft.guardianPhone.trim(),
+        addressStreet: draft.addressStreet.trim(),
+        addressCity: draft.addressCity.trim(),
+        addressState: draft.addressState.trim(),
+        addressZip: draft.addressZip.trim(),
+        medications: draft.medications.trim(),
         college: draft.college.trim(),
         position: draft.position.trim(),
         jerseyNumber: draft.jerseyNumber.trim() ? Number(draft.jerseyNumber) : 0,
@@ -233,7 +286,7 @@ export default function PlayerManagerClient() {
 
       resetForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save player.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save player."));
     } finally {
       setSaving(false);
     }
@@ -256,7 +309,7 @@ export default function PlayerManagerClient() {
       }
       setStatus("Player deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete player.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete player."));
     }
   }
 
@@ -275,6 +328,9 @@ export default function PlayerManagerClient() {
           kicker="Player Details"
         >
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+            <p className="md:col-span-2 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Player information
+            </p>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               <span>
                 First name <span className="text-[#b42318]">*</span>
@@ -324,6 +380,22 @@ export default function PlayerManagerClient() {
               />
             </label>
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Grade
+              <input
+                value={draft.grade}
+                onChange={(event) => setDraft((current) => ({ ...current, grade: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Shirt size
+              <input
+                value={draft.shirtSize}
+                onChange={(event) => setDraft((current) => ({ ...current, shirtSize: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               College
               <input
                 value={draft.college}
@@ -353,6 +425,102 @@ export default function PlayerManagerClient() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Player email
+              <input
+                type="email"
+                value={draft.email}
+                onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Player phone number
+              <input
+                value={draft.phone}
+                onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Guardian information
+            </p>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Guardian first name
+              <input
+                value={draft.guardianFirstName}
+                onChange={(event) => setDraft((current) => ({ ...current, guardianFirstName: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Guardian last name
+              <input
+                value={draft.guardianLastName}
+                onChange={(event) => setDraft((current) => ({ ...current, guardianLastName: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Guardian email
+              <input
+                type="email"
+                value={draft.guardianEmail}
+                onChange={(event) => setDraft((current) => ({ ...current, guardianEmail: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Guardian phone number
+              <input
+                value={draft.guardianPhone}
+                onChange={(event) => setDraft((current) => ({ ...current, guardianPhone: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Address and medical
+            </p>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Street address
+              <input
+                value={draft.addressStreet}
+                onChange={(event) => setDraft((current) => ({ ...current, addressStreet: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              City
+              <input
+                value={draft.addressCity}
+                onChange={(event) => setDraft((current) => ({ ...current, addressCity: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              State
+              <input
+                value={draft.addressState}
+                onChange={(event) => setDraft((current) => ({ ...current, addressState: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              ZIP
+              <input
+                value={draft.addressZip}
+                onChange={(event) => setDraft((current) => ({ ...current, addressZip: event.target.value }))}
+                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
+            </label>
+            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+              Medications
+              <textarea
+                value={draft.medications}
+                onChange={(event) => setDraft((current) => ({ ...current, medications: event.target.value }))}
+                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+              />
             </label>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Bio

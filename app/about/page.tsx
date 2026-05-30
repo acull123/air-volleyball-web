@@ -235,28 +235,16 @@ export default function AboutPage() {
                   {event.notes && (
                     <p className="mt-4 text-sm leading-7 text-[color:var(--muted)]">{event.notes}</p>
                   )}
-                  {(event.externalUrl || event.paymentUrl) && (
+                  {event.externalUrl && (
                     <div className="mt-5 flex flex-wrap gap-2">
-                      {event.externalUrl && (
-                        <a
-                          href={toExternalHref(event.externalUrl)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                        >
-                          Learn more
-                        </a>
-                      )}
-                      {event.paymentUrl && (
-                        <a
-                          href={toExternalHref(event.paymentUrl)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                        >
-                          Register
-                        </a>
-                      )}
+                      <a
+                        href={toExternalHref(event.externalUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                      >
+                        Learn more
+                      </a>
                     </div>
                   )}
                 </div>

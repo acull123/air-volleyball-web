@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { comparePlayersByName } from "@/lib/player-name";
 import type { ConflictDocument } from "@/lib/firebase/schema";
 import { isCurrentPlayer } from "@/lib/player-status";
@@ -182,7 +182,7 @@ export default function ConflictManagerClient() {
 
       resetForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save conflict.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save conflict."));
     } finally {
       setSaving(false);
     }
@@ -205,7 +205,7 @@ export default function ConflictManagerClient() {
       }
       setStatus("Conflict deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete conflict.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete conflict."));
     }
   }
 

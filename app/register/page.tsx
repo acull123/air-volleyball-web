@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import PageHero from "../components/PageHero";
 import SectionCard from "../components/SectionCard";
-import PayPalCheckout from "./PayPalCheckout";
 import { formatEventStatus, getEventStatus, shouldShowEventStatus } from "@/lib/event-status";
 import { getEventTeamLabel } from "@/lib/event-teams";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, getFriendlyFirebaseError, useFirestoreCollection } from "@/lib/firebase";
+import { useAuthSession } from "@/lib/firebase/auth";
 import { comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
 import type { EventDocument } from "@/lib/firebase/schema";
@@ -19,20 +19,48 @@ type NewPlayerDraft = {
   firstName: string;
   lastName: string;
   birthDate: string;
+  school: string;
+  shirtSize: string;
+  email: string;
+  grade: string;
   position: string;
+  guardianFirstName: string;
+  guardianLastName: string;
+  guardianEmail: string;
+  phone: string;
+  guardianPhone: string;
+  addressStreet: string;
+  addressCity: string;
+  addressState: string;
+  addressZip: string;
+  medications: string;
 };
 
 const emptyNewPlayerDraft: NewPlayerDraft = {
   firstName: "",
   lastName: "",
   birthDate: "",
+  school: "",
+  shirtSize: "",
+  email: "",
+  grade: "",
   position: "",
+  guardianFirstName: "",
+  guardianLastName: "",
+  guardianEmail: "",
+  phone: "",
+  guardianPhone: "",
+  addressStreet: "",
+  addressCity: "",
+  addressState: "",
+  addressZip: "",
+  medications: "",
 };
 
 const nextSteps = [
   "Choose the camp or tryout you want to attend.",
-  "Select a current player or add a new athlete profile for this registration.",
-  "Complete payment right away when a payment link is ready for that event.",
+  "Sign in, then select a linked player or add a new athlete profile.",
+  "If an event has a fee, staff will mark the registration paid after offline payment.",
 ];
 
 const registerInteractiveCardClass =
@@ -119,10 +147,18 @@ function normalizeValue(value: string) {
   return value.trim().toLowerCase();
 }
 
+function draftText(value: string | undefined) {
+  return value ?? "";
+}
+
+function draftTrim(value: string | undefined) {
+  return draftText(value).trim();
+}
+
 function RegisterPageContent() {
+  const access = useAuthSession();
   const searchParams = useSearchParams();
   const initialEventId = searchParams.get("event") ?? "";
-  const payPalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "";
   const events = useFirestoreCollection("events");
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
@@ -131,8 +167,7 @@ function RegisterPageContent() {
   const [existingPlayerId, setExistingPlayerId] = useState("");
   const [playerSearchTerm, setPlayerSearchTerm] = useState("");
   const [newPlayer, setNewPlayer] = useState<NewPlayerDraft>(emptyNewPlayerDraft);
-  const [parentName, setParentName] = useState("");
-  const [showPaymentStep, setShowPaymentStep] = useState(false);
+  const [linkedPlayerIdsOverride, setLinkedPlayerIdsOverride] = useState<string[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -157,10 +192,23 @@ function RegisterPageContent() {
 
   const selectedEvent =
     registerableEvents.find((event) => event.id === effectiveSelectedEventId) ?? null;
+  const profileLinkedPlayerIds = useMemo(
+    () => access.authUser?.profile?.playerIds ?? [],
+    [access.authUser?.profile?.playerIds],
+  );
+  const linkedPlayerIds = useMemo(
+    () => linkedPlayerIdsOverride ?? profileLinkedPlayerIds,
+    [linkedPlayerIdsOverride, profileLinkedPlayerIds],
+  );
+  const isRegistrationAvailable = Boolean(access.authUser?.firebaseUser.uid);
 
   const visiblePlayers = useMemo(() => {
     const normalizedSearch = playerSearchTerm.trim().toLowerCase();
-    const sorted = [...players.data].filter(isCurrentPlayer).sort(comparePlayersByName);
+    const linkedPlayerIdSet = new Set(linkedPlayerIds);
+    const sorted = [...players.data]
+      .filter(isCurrentPlayer)
+      .filter((player) => linkedPlayerIdSet.has(player.id))
+      .sort(comparePlayersByName);
 
     if (!normalizedSearch) {
       return sorted;
@@ -173,10 +221,12 @@ function RegisterPageContent() {
         .toLowerCase()
         .includes(normalizedSearch);
     });
-  }, [playerSearchTerm, players.data, teams.data]);
+  }, [linkedPlayerIds, playerSearchTerm, players.data, teams.data]);
 
   const selectedExistingPlayer =
-    players.data.find((player) => isCurrentPlayer(player) && player.id === existingPlayerId) ?? null;
+    players.data.find(
+      (player) => isCurrentPlayer(player) && linkedPlayerIds.includes(player.id) && player.id === existingPlayerId,
+    ) ?? null;
 
   const matchedExistingPlayerForNewRegistration = useMemo(() => {
     if (registrationMode !== "new") {
@@ -204,24 +254,24 @@ function RegisterPageContent() {
 
   const canSubmit =
     Boolean(selectedEvent) &&
-    parentName.trim().length > 0 &&
+    isRegistrationAvailable &&
     (registrationMode === "existing"
       ? Boolean(selectedExistingPlayer)
-      : Boolean(newPlayer.firstName.trim() && newPlayer.lastName.trim() && newPlayer.birthDate));
+      : Boolean(
+          draftTrim(newPlayer.firstName) &&
+            draftTrim(newPlayer.lastName) &&
+            newPlayer.birthDate &&
+            draftTrim(newPlayer.guardianFirstName) &&
+            draftTrim(newPlayer.guardianLastName),
+        ));
 
-  const requiresPayment = Boolean(selectedEvent && (selectedEvent.price ?? 0) > 0);
-  const submitLabel = selectedEvent
-    ? requiresPayment
-      ? "Register And Pay"
-      : "Register"
-    : "Choose An Event";
+  const submitLabel = selectedEvent ? "Register" : "Choose An Event";
 
   const registrationPayload =
     selectedEvent &&
-    parentName.trim() &&
     (registrationMode === "existing"
       ? selectedExistingPlayer
-      : newPlayer.firstName.trim() && newPlayer.lastName.trim() && newPlayer.birthDate)
+      : draftTrim(newPlayer.firstName) && draftTrim(newPlayer.lastName) && newPlayer.birthDate)
       ? {
           eventId: selectedEvent.id,
           playerId:
@@ -232,11 +282,11 @@ function RegisterPageContent() {
           athleteFirstName:
             registrationMode === "existing"
               ? selectedExistingPlayer?.firstName ?? ""
-              : newPlayer.firstName.trim(),
+              : draftTrim(newPlayer.firstName),
           athleteLastName:
             registrationMode === "existing"
               ? selectedExistingPlayer?.lastName ?? ""
-              : newPlayer.lastName.trim(),
+              : draftTrim(newPlayer.lastName),
           birthDate:
             registrationMode === "existing"
               ? selectedExistingPlayer?.birthDate ?? ""
@@ -244,33 +294,124 @@ function RegisterPageContent() {
           position:
             registrationMode === "existing"
               ? selectedExistingPlayer?.position ?? ""
-              : newPlayer.position.trim(),
-          parentName: parentName.trim(),
+              : draftTrim(newPlayer.position),
+          parentName:
+            registrationMode === "new"
+              ? `${draftTrim(newPlayer.guardianFirstName)} ${draftTrim(newPlayer.guardianLastName)}`.trim()
+              : "",
+          school: registrationMode === "new" ? draftTrim(newPlayer.school) : "",
+          shirtSize: registrationMode === "new" ? draftTrim(newPlayer.shirtSize) : "",
+          email: registrationMode === "new" ? draftTrim(newPlayer.email) : "",
+          grade: registrationMode === "new" ? draftTrim(newPlayer.grade) : "",
+          guardianFirstName: registrationMode === "new" ? draftTrim(newPlayer.guardianFirstName) : "",
+          guardianLastName: registrationMode === "new" ? draftTrim(newPlayer.guardianLastName) : "",
+          guardianEmail: registrationMode === "new" ? draftTrim(newPlayer.guardianEmail) : "",
+          phone: registrationMode === "new" ? draftTrim(newPlayer.phone) : "",
+          guardianPhone: registrationMode === "new" ? draftTrim(newPlayer.guardianPhone) : "",
+          addressStreet: registrationMode === "new" ? draftTrim(newPlayer.addressStreet) : "",
+          addressCity: registrationMode === "new" ? draftTrim(newPlayer.addressCity) : "",
+          addressState: registrationMode === "new" ? draftTrim(newPlayer.addressState) : "",
+          addressZip: registrationMode === "new" ? draftTrim(newPlayer.addressZip) : "",
+          medications: registrationMode === "new" ? draftTrim(newPlayer.medications) : "",
         }
       : null;
 
-  async function submitFreeRegistration() {
+  async function linkPlayerToCurrentAccount(playerId: string) {
+    const uid = access.authUser?.firebaseUser.uid;
+
+    if (!uid || !playerId || linkedPlayerIds.includes(playerId)) {
+      return;
+    }
+
+    const nextPlayerIds = Array.from(new Set([...linkedPlayerIds, playerId]));
+
+    await firestoreApi.users.update(uid, {
+      playerIds: nextPlayerIds,
+    });
+    setLinkedPlayerIdsOverride(nextPlayerIds);
+  }
+
+  async function ensureNewRegistrationPlayerId() {
+    if (!registrationPayload || registrationMode !== "new") {
+      return registrationPayload?.playerId ?? "";
+    }
+
+    if (registrationPayload.playerId) {
+      await linkPlayerToCurrentAccount(registrationPayload.playerId);
+      return registrationPayload.playerId;
+    }
+
+    const playerId = await firestoreApi.players.create({
+      firstName: registrationPayload.athleteFirstName,
+      lastName: registrationPayload.athleteLastName,
+      birthDate: registrationPayload.birthDate,
+      school: registrationPayload.school,
+      shirtSize: registrationPayload.shirtSize,
+      email: registrationPayload.email,
+      grade: registrationPayload.grade,
+      guardianFirstName: registrationPayload.guardianFirstName,
+      guardianLastName: registrationPayload.guardianLastName,
+      guardianEmail: registrationPayload.guardianEmail,
+      phone: registrationPayload.phone,
+      guardianPhone: registrationPayload.guardianPhone,
+      addressStreet: registrationPayload.addressStreet,
+      addressCity: registrationPayload.addressCity,
+      addressState: registrationPayload.addressState,
+      addressZip: registrationPayload.addressZip,
+      medications: registrationPayload.medications,
+      college: "",
+      position: registrationPayload.position,
+      jerseyNumber: 0,
+      teamId: "",
+      bio: "",
+      photoUrl: "",
+      active: true,
+      isAlumni: false,
+    });
+
+    await linkPlayerToCurrentAccount(playerId);
+    return playerId;
+  }
+
+  async function submitRegistration() {
     if (!selectedEvent || !registrationPayload) {
       throw new Error("Registration details are incomplete.");
     }
+
+    const registeredPlayerId =
+      registrationMode === "new" ? await ensureNewRegistrationPlayerId() : registrationPayload.playerId;
 
     await firestoreApi.registrations.create({
       eventId: selectedEvent.id,
       eventTitle: selectedEvent.title,
       eventType: selectedEvent.type,
       eventPrice: selectedEvent.price ?? 0,
-      playerId: registrationPayload.playerId,
+      playerId: registeredPlayerId,
       isNewPlayer: registrationPayload.isNewPlayer,
       athleteFirstName: registrationPayload.athleteFirstName,
       athleteLastName: registrationPayload.athleteLastName,
       birthDate: registrationPayload.birthDate,
       position: registrationPayload.position,
       parentName: registrationPayload.parentName,
+      school: registrationPayload.school,
+      shirtSize: registrationPayload.shirtSize,
+      email: registrationPayload.email,
+      grade: registrationPayload.grade,
+      guardianFirstName: registrationPayload.guardianFirstName,
+      guardianLastName: registrationPayload.guardianLastName,
+      guardianEmail: registrationPayload.guardianEmail,
+      phone: registrationPayload.phone,
+      guardianPhone: registrationPayload.guardianPhone,
+      addressStreet: registrationPayload.addressStreet,
+      addressCity: registrationPayload.addressCity,
+      addressState: registrationPayload.addressState,
+      addressZip: registrationPayload.addressZip,
+      medications: registrationPayload.medications,
       paymentProvider: "",
       paymentOrderId: "",
       paymentCaptureId: "",
       status: "submitted",
-      paymentStatus: "paid",
+      paymentStatus: (selectedEvent.price ?? 0) > 0 ? "unpaid" : "paid",
     });
   }
 
@@ -282,8 +423,8 @@ function RegisterPageContent() {
       return;
     }
 
-    if (!parentName.trim()) {
-      setError("Parent name is required.");
+    if (!access.authUser?.firebaseUser.uid) {
+      setError("Sign in before registering for an event.");
       return;
     }
 
@@ -291,10 +432,10 @@ function RegisterPageContent() {
       registrationMode === "existing"
         ? selectedExistingPlayer
         : {
-            firstName: newPlayer.firstName.trim(),
-            lastName: newPlayer.lastName.trim(),
+            firstName: draftTrim(newPlayer.firstName),
+            lastName: draftTrim(newPlayer.lastName),
             birthDate: newPlayer.birthDate,
-            position: newPlayer.position.trim(),
+            position: draftTrim(newPlayer.position),
           };
 
     if (!athlete || !athlete.firstName || !athlete.lastName || !athlete.birthDate) {
@@ -302,33 +443,33 @@ function RegisterPageContent() {
       return;
     }
 
-    setStatus(null);
-    setError(null);
-
-    if ((selectedEvent.price ?? 0) > 0) {
-      if (!payPalClientId) {
-        setError("Payment is not set up yet for this site.");
-        return;
-      }
-
-      setShowPaymentStep(true);
+    if (
+      registrationMode === "new" &&
+      (!draftTrim(newPlayer.guardianFirstName) || !draftTrim(newPlayer.guardianLastName))
+    ) {
+      setError("Guardian first and last name are required for new players.");
       return;
     }
+
+    setStatus(null);
+    setError(null);
 
     setSubmitting(true);
 
     try {
-      await submitFreeRegistration();
-      setStatus("Registration submitted.");
+      await submitRegistration();
+      setStatus(
+        (selectedEvent.price ?? 0) > 0
+          ? "Registration submitted. Payment status is unpaid until staff marks it paid."
+          : "Registration submitted.",
+      );
       setExistingPlayerId("");
       setNewPlayer(emptyNewPlayerDraft);
-      setParentName("");
       setPlayerSearchTerm("");
-      setShowPaymentStep(false);
       setRegistrationMode("existing");
     } catch (submitError) {
       setError(
-        submitError instanceof Error ? submitError.message : "Unable to submit registration.",
+        getFriendlyFirebaseError(submitError, "Unable to submit registration."),
       );
     } finally {
       setSubmitting(false);
@@ -340,7 +481,7 @@ function RegisterPageContent() {
       <PageHero
         eyebrow="Registration"
         title="Camp And Tryout Registration"
-        description="Choose a current camp or tryout, connect it to a player, and move straight into payment when that event is ready to collect it."
+        description="Choose a current camp or tryout and connect it to a player. Paid events are tracked for offline payment."
         actions={[
           { href: "/training", label: "View Training" },
           { href: "/teams", label: "Explore Teams", variant: "secondary" },
@@ -374,7 +515,6 @@ function RegisterPageContent() {
                     type="button"
                     onClick={() => {
                       setSelectedEventId(event.id);
-                      setShowPaymentStep(false);
                       setError(null);
                     }}
                     className={isSelected ? registerSelectedCardClass : registerInteractiveCardClass}
@@ -408,7 +548,23 @@ function RegisterPageContent() {
         </SectionCard>
 
         <SectionCard title="Registration Form" kicker="Player Details">
-          {selectedEvent ? (
+          {selectedEvent ? access.loading ? (
+            <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
+              Checking account access...
+            </div>
+          ) : !isRegistrationAvailable ? (
+            <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center">
+              <p className="text-sm text-[color:var(--muted)]">
+                Sign in before registering for this event.
+              </p>
+              <Link
+                href="/login"
+                className="mt-4 inline-flex rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66]"
+              >
+                Sign In Or Create Account
+              </Link>
+            </div>
+          ) : (
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5">
                 <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
@@ -425,29 +581,16 @@ function RegisterPageContent() {
                 </div>
                 {(selectedEvent.price ?? 0) > 0 && (
                   <p className="mt-4 text-sm leading-7 text-[color:var(--muted)]">
-                    Payment will be collected during registration for this event.
+                    This event has a fee. Staff will mark the registration paid after offline payment.
                   </p>
                 )}
               </div>
-
-              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                <span>
-                  Parent name <span className="text-[#b42318]">*</span>
-                </span>
-                <input
-                  value={parentName}
-                  onChange={(event) => setParentName(event.target.value)}
-                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  placeholder="Parent or guardian name"
-                />
-              </label>
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
                   onClick={() => {
                     setRegistrationMode("existing");
-                    setShowPaymentStep(false);
                     setError(null);
                   }}
                   className={registrationMode === "existing" ? registerSelectedCardClass : registerInteractiveCardClass}
@@ -456,14 +599,13 @@ function RegisterPageContent() {
                     Existing Player
                   </p>
                   <p className={`mt-2 text-sm leading-7 ${registrationMode === "existing" ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
-                    Choose a player already in the club records.
+                    Choose a player already linked in your player portal.
                   </p>
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setRegistrationMode("new");
-                    setShowPaymentStep(false);
                     setError(null);
                   }}
                   className={registrationMode === "new" ? registerSelectedCardClass : registerInteractiveCardClass}
@@ -480,12 +622,12 @@ function RegisterPageContent() {
               {registrationMode === "existing" ? (
                 <div className="space-y-4">
                   <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                    Search players
+                    Search linked players
                     <input
                       value={playerSearchTerm}
                       onChange={(event) => setPlayerSearchTerm(event.target.value)}
                       className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                      placeholder="Search by player name, team, or position"
+                      placeholder="Search linked players by name, team, or position"
                     />
                   </label>
                   <div className="max-h-[24rem] space-y-3 overflow-y-auto pr-2">
@@ -499,7 +641,9 @@ function RegisterPageContent() {
                       </div>
                     ) : visiblePlayers.length === 0 ? (
                       <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                        No players match the current search.
+                        {linkedPlayerIds.length === 0
+                          ? "No players are linked to your account yet. Add a new player instead."
+                          : "No linked players match the current search."}
                       </div>
                     ) : (
                       visiblePlayers.map((player) => {
@@ -531,12 +675,15 @@ function RegisterPageContent() {
               ) : (
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
+                    <p className="md:col-span-2 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                      Player information
+                    </p>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
                       <span>
                         First name <span className="text-[#b42318]">*</span>
                       </span>
                       <input
-                        value={newPlayer.firstName}
+                        value={draftText(newPlayer.firstName)}
                         onChange={(event) =>
                           setNewPlayer((current) => ({ ...current, firstName: event.target.value }))
                         }
@@ -548,7 +695,7 @@ function RegisterPageContent() {
                         Last name <span className="text-[#b42318]">*</span>
                       </span>
                       <input
-                        value={newPlayer.lastName}
+                        value={draftText(newPlayer.lastName)}
                         onChange={(event) =>
                           setNewPlayer((current) => ({ ...current, lastName: event.target.value }))
                         }
@@ -560,7 +707,7 @@ function RegisterPageContent() {
                         Birthdate <span className="text-[#b42318]">*</span>
                       </span>
                       <input
-                        value={newPlayer.birthDate}
+                        value={draftText(newPlayer.birthDate)}
                         onChange={(event) =>
                           setNewPlayer((current) => ({ ...current, birthDate: event.target.value }))
                         }
@@ -571,12 +718,164 @@ function RegisterPageContent() {
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
                       Position
                       <input
-                        value={newPlayer.position}
+                        value={draftText(newPlayer.position)}
                         onChange={(event) =>
                           setNewPlayer((current) => ({ ...current, position: event.target.value }))
                         }
                         className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                         placeholder="Outside, setter, libero..."
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      School
+                      <input
+                        value={draftText(newPlayer.school)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, school: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Grade
+                      <input
+                        value={draftText(newPlayer.grade)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, grade: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Shirt size
+                      <input
+                        value={draftText(newPlayer.shirtSize)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, shirtSize: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Player email
+                      <input
+                        type="email"
+                        value={draftText(newPlayer.email)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, email: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Player phone number
+                      <input
+                        value={draftText(newPlayer.phone)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, phone: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                      Guardian information
+                    </p>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      <span>
+                        Guardian first name <span className="text-[#b42318]">*</span>
+                      </span>
+                      <input
+                        value={draftText(newPlayer.guardianFirstName)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardianFirstName: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      <span>
+                        Guardian last name <span className="text-[#b42318]">*</span>
+                      </span>
+                      <input
+                        value={draftText(newPlayer.guardianLastName)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardianLastName: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Guardian email
+                      <input
+                        type="email"
+                        value={draftText(newPlayer.guardianEmail)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardianEmail: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Guardian phone number
+                      <input
+                        value={draftText(newPlayer.guardianPhone)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardianPhone: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                      Address and medical
+                    </p>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Street address
+                      <input
+                        value={draftText(newPlayer.addressStreet)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, addressStreet: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      City
+                      <input
+                        value={draftText(newPlayer.addressCity)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, addressCity: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      State
+                      <input
+                        value={draftText(newPlayer.addressState)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, addressState: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      ZIP
+                      <input
+                        value={draftText(newPlayer.addressZip)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, addressZip: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Medications
+                      <textarea
+                        value={draftText(newPlayer.medications)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, medications: event.target.value }))
+                        }
+                        className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
                       />
                     </label>
                   </div>
@@ -604,27 +903,6 @@ function RegisterPageContent() {
                   <span className="text-sm text-[color:var(--muted)]">No event fee</span>
                 )}
               </div>
-
-              {showPaymentStep && registrationPayload && requiresPayment && payPalClientId && (
-                <PayPalCheckout
-                  clientId={payPalClientId}
-                  eventId={selectedEvent.id}
-                  registration={registrationPayload}
-                  onSuccess={() => {
-                    setStatus("Registration and payment completed.");
-                    setError(null);
-                    setExistingPlayerId("");
-                    setNewPlayer(emptyNewPlayerDraft);
-                    setParentName("");
-                    setPlayerSearchTerm("");
-                    setShowPaymentStep(false);
-                    setRegistrationMode("existing");
-                  }}
-                  onError={(message) => {
-                    setError(message);
-                  }}
-                />
-              )}
 
               {status && (
                 <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--ink)]">

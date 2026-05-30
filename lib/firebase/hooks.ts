@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { QueryConstraint } from "firebase/firestore";
 import { firestoreApi } from "./api";
+import { getFriendlyFirebaseError } from "./errors";
 import type { CollectionName, FirestoreCollections } from "./schema";
 
 type LoadState<T> = {
@@ -52,7 +53,12 @@ export function useFirestoreCollection<K extends CollectionName>(
           error: null,
         }),
       options?.constraints,
-      (error) => setState({ key: subscriptionKey, data: [], error: error.message }),
+      (error) =>
+        setState({
+          key: subscriptionKey,
+          data: [],
+          error: getFriendlyFirebaseError(error, "Unable to load this information right now."),
+        }),
     );
 
     return unsubscribe;
@@ -95,7 +101,12 @@ export function useFirestoreDocument<K extends CollectionName>(
           data: data as FirestoreCollections[K] | null,
           error: null,
         }),
-      (error) => setState({ key: subscriptionKey, data: null, error: error.message }),
+      (error) =>
+        setState({
+          key: subscriptionKey,
+          data: null,
+          error: getFriendlyFirebaseError(error, "Unable to load this information right now."),
+        }),
     );
 
     return unsubscribe;

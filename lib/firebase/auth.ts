@@ -5,12 +5,14 @@ import {
   createUserWithEmailAndPassword,
   deleteUser,
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   type User,
 } from "firebase/auth";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, requireDb } from "./client";
+import { getFriendlyFirebaseError } from "./errors";
 import type { UserDocument, UserRole } from "./schema";
 
 export type AuthenticatedRoleUser = {
@@ -28,6 +30,10 @@ export function requireAuth() {
 
 export async function signInUser(email: string, password: string) {
   return signInWithEmailAndPassword(requireAuth(), email, password);
+}
+
+export async function sendPasswordReset(email: string) {
+  return sendPasswordResetEmail(requireAuth(), email);
 }
 
 export async function createPortalAccount(params: {
@@ -186,7 +192,7 @@ export function useAuthSession() {
         setState({
           authUser: null,
           loading: false,
-          error: error.message,
+          error: getFriendlyFirebaseError(error, "Unable to check sign-in status."),
         });
       },
     );

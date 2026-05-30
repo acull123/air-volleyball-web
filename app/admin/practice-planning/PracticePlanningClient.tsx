@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import SectionCard from "@/app/components/SectionCard";
 import ClubCalendar from "@/app/components/ClubCalendar";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { getEventTeamIds } from "@/lib/event-teams";
 import type { ConflictDocument, EventDocument, GymSpaceDocument, TeamDocument } from "@/lib/firebase/schema";
 import { compareTeamsByAge } from "@/lib/team-sort";
@@ -265,6 +265,13 @@ export default function PracticePlanningClient() {
         .sort((left, right) => `${left.startDate} ${left.startTime}`.localeCompare(`${right.startDate} ${right.startTime}`)),
     [events.data],
   );
+  const calendarEvents = useMemo(
+    () =>
+      [...events.data]
+        .filter((event) => event.active !== false)
+        .sort((left, right) => `${left.startDate} ${left.startTime}`.localeCompare(`${right.startDate} ${right.startTime}`)),
+    [events.data],
+  );
   const calendarIssues = useMemo(() => {
     const issues: string[] = [];
     const practicesPerWeek = Number(settings.practicesPerWeek);
@@ -382,7 +389,7 @@ export default function PracticePlanningClient() {
       await Promise.all(practiceEvents.map((event) => firestoreApi.events.remove(event.id)));
       setStatus(`${practiceEvents.length} practice${practiceEvents.length === 1 ? "" : "s"} deleted.`);
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete practices.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete practices."));
     } finally {
       setSaving(false);
     }
@@ -407,7 +414,7 @@ export default function PracticePlanningClient() {
       );
       setStatus(`${unpublishedPractices.length} practice${unpublishedPractices.length === 1 ? "" : "s"} published.`);
     } catch (publishError) {
-      setError(publishError instanceof Error ? publishError.message : "Unable to publish practices.");
+      setError(getFriendlyFirebaseError(publishError, "Unable to publish practices."));
     } finally {
       setSaving(false);
     }
@@ -579,7 +586,7 @@ export default function PracticePlanningClient() {
         }`,
       );
     } catch (generateError) {
-      setError(generateError instanceof Error ? generateError.message : "Unable to generate practices.");
+      setError(getFriendlyFirebaseError(generateError, "Unable to generate practices."));
     } finally {
       setSaving(false);
     }
@@ -663,7 +670,7 @@ export default function PracticePlanningClient() {
       </SectionCard>
 
       <ClubCalendar
-        events={practiceEvents}
+        events={calendarEvents}
         teams={activeTeams}
         conflicts={conflicts.data}
         gymSpaces={gymSpaces.data}

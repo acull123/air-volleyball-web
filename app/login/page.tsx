@@ -7,18 +7,19 @@ import ScheduleTable from "../components/ScheduleTable";
 import SectionCard from "../components/SectionCard";
 import { getEventStatus } from "@/lib/event-status";
 import { getEventTeamIds } from "@/lib/event-teams";
-import { createPortalAccount, signInUser, useAuthSession } from "@/lib/firebase/auth";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { createPortalAccount, sendPasswordReset, signInUser, useAuthSession } from "@/lib/firebase/auth";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { compareAthletesByName, comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
-import type { ConflictDocument, RegistrationDocument } from "@/lib/firebase/schema";
+import type { ConflictDocument, InvoiceDocument, RegistrationDocument } from "@/lib/firebase/schema";
 import type { Event } from "../types/models";
 
-type PortalMode = "signin" | "create";
+type PortalMode = "signin" | "create" | "reset";
 type AccountRole = "parent" | "player" | "unverifiedCoach";
 
 const portalHighlights = [
   "Link one or more players to your account when you create it.",
+  "Register your linked players for camps, tryouts, and other open events.",
   "See season events tied to your players and their teams.",
   "Use the same account later for balances, schedules, and club updates.",
 ];
@@ -173,7 +174,7 @@ function useRegistrationsByPlayerIds(playerIds: string[]) {
           setState({
             key: subscriptionKey,
             data: [],
-            error: error.message,
+            error: getFriendlyFirebaseError(error, "Unable to load registrations right now."),
           });
         },
       ),
@@ -259,7 +260,93 @@ function useConflictsByPlayerIds(playerIds: string[]) {
           setState({
             key: subscriptionKey,
             data: [],
-            error: error.message,
+            error: getFriendlyFirebaseError(error, "Unable to load conflicts right now."),
+          });
+        },
+      ),
+    );
+
+    return () => {
+      cancelled = true;
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [normalizedPlayerIds, subscriptionKey]);
+
+  if (normalizedPlayerIds.length === 0) {
+    return {
+      data: [],
+      loading: false,
+      error: null,
+    };
+  }
+
+  return {
+    data: state.key === subscriptionKey ? state.data : [],
+    loading: state.key !== subscriptionKey && state.error === null,
+    error: state.key === subscriptionKey ? state.error : null,
+  };
+}
+
+function useInvoicesByPlayerIds(playerIds: string[]) {
+  const [state, setState] = useState<{
+    key: string | null;
+    data: InvoiceDocument[];
+    error: string | null;
+  }>({
+    key: null,
+    data: [],
+    error: null,
+  });
+
+  const normalizedPlayerIds = useMemo(
+    () => Array.from(new Set(playerIds.filter(Boolean))).sort(),
+    [playerIds],
+  );
+  const subscriptionKey = normalizedPlayerIds.join("|");
+
+  useEffect(() => {
+    if (normalizedPlayerIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    const invoiceMap = new Map<string, InvoiceDocument>();
+
+    const unsubscribers = normalizedPlayerIds.map((playerId) =>
+      firestoreApi.invoices.subscribe(
+        (items) => {
+          if (cancelled) {
+            return;
+          }
+
+          for (const [invoiceId, invoice] of invoiceMap.entries()) {
+            if (invoice.playerId === playerId) {
+              invoiceMap.delete(invoiceId);
+            }
+          }
+
+          items.forEach((item) => {
+            invoiceMap.set(item.id, item);
+          });
+
+          setState({
+            key: subscriptionKey,
+            data: [...invoiceMap.values()].sort((left, right) =>
+              `${left.teamId} ${left.title}`.localeCompare(`${right.teamId} ${right.title}`),
+            ),
+            error: null,
+          });
+        },
+        [where("playerId", "==", playerId)],
+        (error) => {
+          if (cancelled) {
+            return;
+          }
+
+          setState({
+            key: subscriptionKey,
+            data: [],
+            error: getFriendlyFirebaseError(error, "Unable to load payment status right now."),
           });
         },
       ),
@@ -303,17 +390,13 @@ export default function LoginPage() {
   const teams = useFirestoreCollection("teams");
   const events = useFirestoreCollection("events");
   const registrations = useRegistrationsByPlayerIds(linkedPlayerIds);
-  const invoices = useFirestoreCollection("invoices", {
-    enabled: Boolean(access.authUser?.firebaseUser.uid),
-    constraints: access.authUser?.firebaseUser.uid
-      ? [where("userId", "==", access.authUser.firebaseUser.uid)]
-      : undefined,
-  });
+  const invoices = useInvoicesByPlayerIds(linkedPlayerIds);
   const conflicts = useConflictsByPlayerIds(linkedPlayerIds);
 
   const [mode, setMode] = useState<PortalMode>("signin");
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
   const [createFirstName, setCreateFirstName] = useState("");
   const [createLastName, setCreateLastName] = useState("");
   const [createEmail, setCreateEmail] = useState("");
@@ -337,6 +420,7 @@ export default function LoginPage() {
   });
   const [conflictReason, setConflictReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [submittingConflict, setSubmittingConflict] = useState(false);
   const [savingLinkedPlayers, setSavingLinkedPlayers] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -434,6 +518,29 @@ export default function LoginPage() {
         }),
     [events.data, linkedPlayerIds, linkedPlayers, linkedTeamIds, registrations.data, teams.data],
   );
+  const eventPaymentRegistrations = useMemo(
+    () =>
+      registrations.data
+        .filter((registration) => (registration.eventPrice ?? 0) > 0)
+        .sort((left, right) => left.eventTitle.localeCompare(right.eventTitle)),
+    [registrations.data],
+  );
+  const teamPaymentInvoices = useMemo(
+    () =>
+      invoices.data
+        .filter((invoice) => invoice.teamId && linkedPlayerIds.includes(invoice.playerId))
+        .sort((left, right) => {
+          const leftTeam = teams.data.find((team) => team.id === left.teamId)?.name ?? left.title;
+          const rightTeam = teams.data.find((team) => team.id === right.teamId)?.name ?? right.title;
+          return leftTeam.localeCompare(rightTeam);
+        }),
+    [invoices.data, linkedPlayerIds, teams.data],
+  );
+
+  function getLinkedPlayerName(playerId: string, fallback: string) {
+    const player = linkedPlayers.find((entry) => entry.id === playerId);
+    return player ? `${player.firstName} ${player.lastName}` : fallback;
+  }
 
   function togglePlayer(playerId: string) {
     setSelectedPlayerIds((current) => {
@@ -479,7 +586,7 @@ export default function LoginPage() {
       }
     } catch (submitError) {
       setLinkedPlayerError(
-        submitError instanceof Error ? submitError.message : "Unable to update linked players.",
+        getFriendlyFirebaseError(submitError, "Unable to update linked players."),
       );
     } finally {
       setSavingLinkedPlayers(false);
@@ -507,9 +614,39 @@ export default function LoginPage() {
       await signInUser(signInEmail.trim(), signInPassword);
       setStatus("Signed in.");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to sign in.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to sign in."));
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  function openPasswordReset() {
+    setResetEmail(signInEmail.trim());
+    setMode("reset");
+    setStatus(null);
+    setError(null);
+  }
+
+  async function handlePasswordReset(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = resetEmail.trim();
+
+    if (!email) {
+      setError("Enter your email address.");
+      return;
+    }
+
+    setSendingPasswordReset(true);
+    setStatus(null);
+    setError(null);
+
+    try {
+      await sendPasswordReset(email);
+      setStatus("Password reset email sent. Check your inbox for the reset link.");
+    } catch (resetError) {
+      setError(getFriendlyFirebaseError(resetError, "Unable to send password reset email."));
+    } finally {
+      setSendingPasswordReset(false);
     }
   }
 
@@ -555,7 +692,7 @@ export default function LoginPage() {
       setSelectedPlayerIds([]);
       setPlayerSearchTerm("");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to create account.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to create account."));
     } finally {
       setSubmitting(false);
     }
@@ -608,7 +745,7 @@ export default function LoginPage() {
       setConflictStartAt("");
       setConflictEndAt("");
     } catch (submitError) {
-      setConflictError(submitError instanceof Error ? submitError.message : "Unable to submit conflict.");
+      setConflictError(getFriendlyFirebaseError(submitError, "Unable to submit conflict."));
     } finally {
       setSubmittingConflict(false);
     }
@@ -624,14 +761,14 @@ export default function LoginPage() {
           actions={[{ href: "/profile", label: "Edit Profile" }]}
         />
 
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="space-y-8">
           <SectionCard title="Linked Players" kicker="Your Account">
             {linkedPlayers.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
                 No players are linked to this account yet.
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {linkedPlayers.map((player) => {
                   const teamName = teams.data.find((team) => team.id === player.teamId)?.name ?? "No team assigned";
 
@@ -670,13 +807,13 @@ export default function LoginPage() {
                   placeholder="Search by player name, team, or position"
                 />
               </label>
-              <div className="max-h-[20rem] space-y-3 overflow-y-auto pr-2">
+              <div className="flex gap-3 overflow-x-auto pb-2">
                 {players.loading || teams.loading ? (
-                  <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  <div className="min-w-[18rem] rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
                     Loading players...
                   </div>
                 ) : filteredPlayers.length === 0 ? (
-                  <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  <div className="min-w-[18rem] rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
                     No players match the current search.
                   </div>
                 ) : (
@@ -685,7 +822,7 @@ export default function LoginPage() {
                     const isLinked = linkedPlayerIds.includes(player.id);
 
                     return (
-                      <div key={player.id} className="rounded-2xl border border-[color:var(--line)] bg-white px-4 py-4">
+                      <div key={player.id} className="min-w-[18rem] rounded-2xl border border-[color:var(--line)] bg-white px-4 py-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                           <div>
                             <p className="font-semibold text-[color:var(--ink)]">
@@ -723,7 +860,7 @@ export default function LoginPage() {
           </SectionCard>
 
           <SectionCard title="Portal Overview" kicker="Season Tools">
-            <div className="grid gap-5 xl:grid-cols-[0.92fr_1.08fr]">
+            <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
               <div className="space-y-4">
                 <div className={portalStaticCardClass}>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
@@ -744,27 +881,49 @@ export default function LoginPage() {
 
                 <div className={portalStaticCardClass}>
                   <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                    Invoices
+                    Payments
                   </p>
                   <div className="mt-4 space-y-3">
-                    {invoices.loading ? (
-                      <p className="text-sm text-[color:var(--muted)]">Loading invoices...</p>
-                    ) : invoices.error ? (
-                      <p className="text-sm text-[color:var(--muted)]">Invoices are unavailable right now.</p>
-                    ) : invoices.data.length === 0 ? (
-                      <p className="text-sm text-[color:var(--muted)]">No invoices are available yet.</p>
+                    {registrations.loading || invoices.loading ? (
+                      <p className="text-sm text-[color:var(--muted)]">Loading payment status...</p>
+                    ) : registrations.error || invoices.error ? (
+                      <p className="text-sm text-[color:var(--muted)]">Payment status is unavailable right now.</p>
+                    ) : eventPaymentRegistrations.length === 0 && teamPaymentInvoices.length === 0 ? (
+                      <p className="text-sm text-[color:var(--muted)]">No paid events or team payments are linked yet.</p>
                     ) : (
-                      invoices.data.map((invoice) => (
-                        <div key={invoice.id} className="rounded-2xl bg-[color:var(--paper)] px-4 py-4">
-                          <p className="font-semibold text-[color:var(--ink)]">{invoice.title}</p>
-                          <p className="mt-1 text-sm text-[color:var(--muted)]">
-                            {toAmountLabel(invoice.amount)} · Due {toDateLabel(invoice.dueDate)}
-                          </p>
-                          <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                            {invoice.status}
-                          </p>
-                        </div>
-                      ))
+                      <>
+                        {eventPaymentRegistrations.map((registration) => (
+                          <div key={registration.id} className="rounded-2xl bg-[color:var(--paper)] px-4 py-4">
+                            <p className="font-semibold text-[color:var(--ink)]">{registration.eventTitle}</p>
+                            <p className="mt-1 text-sm text-[color:var(--muted)]">
+                              {getLinkedPlayerName(
+                                registration.playerId,
+                                `${registration.athleteFirstName} ${registration.athleteLastName}`.trim(),
+                              )} · {toAmountLabel(registration.eventPrice)}
+                            </p>
+                            <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                              Event payment: {registration.paymentStatus}
+                            </p>
+                          </div>
+                        ))}
+                        {teamPaymentInvoices.map((invoice) => {
+                          const teamName = teams.data.find((team) => team.id === invoice.teamId)?.name ?? invoice.title;
+
+                          return (
+                            <div key={invoice.id} className="rounded-2xl bg-[color:var(--paper)] px-4 py-4">
+                              <p className="font-semibold text-[color:var(--ink)]">{teamName}</p>
+                              <p className="mt-1 text-sm text-[color:var(--muted)]">
+                                {getLinkedPlayerName(invoice.playerId, "Linked player")}
+                                {invoice.amount ? ` · ${toAmountLabel(invoice.amount)}` : ""}
+                                {invoice.dueDate ? ` · Due ${toDateLabel(invoice.dueDate)}` : ""}
+                              </p>
+                              <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                                Team payment: {invoice.status}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </>
                     )}
                   </div>
                 </div>
@@ -925,21 +1084,8 @@ export default function LoginPage() {
 
       <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr]">
         <SectionCard
-          title={mode === "signin" ? "Portal Login" : "Create Account"}
+          title={mode === "signin" ? "Portal Login" : mode === "reset" ? "Reset Password" : "Create Account"}
           kicker="Account Access"
-          headerAction={
-            <button
-              type="button"
-              onClick={() => {
-                setMode((current) => (current === "signin" ? "create" : "signin"));
-                setStatus(null);
-                setError(null);
-              }}
-              className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-            >
-              {mode === "signin" ? "Create Account" : "Back To Login"}
-            </button>
-          }
         >
           {mode === "signin" ? (
             <form className="space-y-4" onSubmit={handleSignIn}>
@@ -966,13 +1112,68 @@ export default function LoginPage() {
                   placeholder="••••••••"
                 />
               </label>
-              <button
-                type="submit"
-                disabled={submitting || access.loading}
-                className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? "Signing In..." : "Sign In"}
-              </button>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={submitting || access.loading}
+                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "Signing In..." : "Sign In"}
+                </button>
+                <button
+                  type="button"
+                  onClick={openPasswordReset}
+                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Forgot Password?
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("create");
+                    setStatus(null);
+                    setError(null);
+                  }}
+                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                >
+                  Create Account
+                </button>
+              </div>
+            </form>
+          ) : mode === "reset" ? (
+            <form className="space-y-4" onSubmit={handlePasswordReset}>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Email <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  type="email"
+                  value={resetEmail}
+                  onChange={(event) => setResetEmail(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="family@email.com"
+                />
+              </label>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={sendingPasswordReset}
+                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {sendingPasswordReset ? "Sending..." : "Send Recovery Link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("signin");
+                    setStatus(null);
+                    setError(null);
+                  }}
+                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                >
+                  Back To Login
+                </button>
+              </div>
             </form>
           ) : (
             <form className="space-y-6" onSubmit={handleCreateAccount}>

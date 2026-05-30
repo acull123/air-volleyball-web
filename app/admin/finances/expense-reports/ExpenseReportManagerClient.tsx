@@ -5,7 +5,7 @@ import { Timestamp, where, type QueryConstraint } from "firebase/firestore";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { useAuthSession } from "@/lib/firebase/auth";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import type { CoachDocument, EventDocument, ExpenseReportDocument, PayTypeDocument } from "@/lib/firebase/schema";
 import { uploadExpenseReceipt } from "@/lib/firebase/storage";
 import { toExternalHref } from "@/lib/url";
@@ -368,9 +368,10 @@ export default function ExpenseReportManagerClient() {
         } catch (receiptError) {
           receiptUploadFailed = true;
           setError(
-            receiptError instanceof Error
-              ? `Expense report submitted, but the receipt did not upload: ${receiptError.message}`
-              : "Expense report submitted, but the receipt did not upload.",
+            `Expense report submitted, but the receipt did not upload: ${getFriendlyFirebaseError(
+              receiptError,
+              "Unable to upload the receipt.",
+            )}`,
           );
         }
       }
@@ -383,7 +384,7 @@ export default function ExpenseReportManagerClient() {
       }
       setStatus(receiptUploadFailed ? null : "Expense report submitted.");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to submit expense report.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to submit expense report."));
     } finally {
       setSaving(false);
     }
@@ -424,7 +425,7 @@ export default function ExpenseReportManagerClient() {
       setSubmittedSuggestedExpenseIds((current) => [...new Set([...current, suggestion.id])]);
       setStatus("Suggested expense report submitted.");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to submit suggested expense report.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to submit suggested expense report."));
     } finally {
       setSuggestedExpenseSubmittingId(null);
     }
@@ -455,7 +456,7 @@ export default function ExpenseReportManagerClient() {
       ]);
       setStatus("Suggested expense reports skipped.");
     } catch (skipError) {
-      setError(skipError instanceof Error ? skipError.message : "Unable to skip suggested expense reports.");
+      setError(getFriendlyFirebaseError(skipError, "Unable to skip suggested expense reports."));
     } finally {
       setSkippingSuggestedExpenses(false);
     }
@@ -486,7 +487,7 @@ export default function ExpenseReportManagerClient() {
       });
       setStatus(`Expense report ${nextStatus}.`);
     } catch (reviewError) {
-      setError(reviewError instanceof Error ? reviewError.message : "Unable to update expense report.");
+      setError(getFriendlyFirebaseError(reviewError, "Unable to update expense report."));
     } finally {
       setReviewingId(null);
     }
@@ -529,7 +530,7 @@ export default function ExpenseReportManagerClient() {
       );
       setStatus(`${visibleExpenseReports.length} expense reports moved to ${bulkNextStatus}.`);
     } catch (bulkError) {
-      setError(bulkError instanceof Error ? bulkError.message : "Unable to update expense reports.");
+      setError(getFriendlyFirebaseError(bulkError, "Unable to update expense reports."));
     } finally {
       setBulkUpdating(false);
     }

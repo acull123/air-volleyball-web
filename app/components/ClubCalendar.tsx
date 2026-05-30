@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getFriendlyFirebaseError } from "@/lib/firebase";
 import type {
   ConflictDocument,
   EventDocument,
@@ -733,6 +734,10 @@ export default function ClubCalendar({
     });
   }
 
+  function toggleAllTeams() {
+    setSelectedTeamIds(visibleTeamCount > 0 ? new Set() : new Set(teamOptions.map((team) => team.id)));
+  }
+
   function openDay(dateKey: string) {
     if (monthOnly) {
       onMonthDayClick?.(dateKey);
@@ -806,7 +811,7 @@ export default function ClubCalendar({
         setDuplicateSourceEventId(null);
       }
     } catch (duplicateError) {
-      setError(duplicateError instanceof Error ? duplicateError.message : "Unable to duplicate event.");
+      setError(getFriendlyFirebaseError(duplicateError, "Unable to duplicate event."));
     } finally {
       setSavingDuplicate(false);
     }
@@ -863,7 +868,7 @@ export default function ClubCalendar({
       setStatus("Event updated.");
       setSelectedEventId(null);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to update event.");
+      setError(getFriendlyFirebaseError(saveError, "Unable to update event."));
     } finally {
       setSavingTime(false);
     }
@@ -894,7 +899,7 @@ export default function ClubCalendar({
       setSelectedEventId(null);
       setStatus("Event deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete event.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete event."));
     } finally {
       setSavingTime(false);
     }
@@ -922,7 +927,7 @@ export default function ClubCalendar({
         `${pendingDayChanges.length} event time${pendingDayChanges.length === 1 ? "" : "s"} updated.`,
       );
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to update event times.");
+      setError(getFriendlyFirebaseError(saveError, "Unable to update event times."));
     } finally {
       setSavingTime(false);
     }
@@ -950,7 +955,7 @@ export default function ClubCalendar({
       await onEventDateSave(event.id, dateKey, endDate);
       setStatus("Practice date updated.");
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "Unable to update practice date.");
+      setError(getFriendlyFirebaseError(saveError, "Unable to update practice date."));
     } finally {
       setSavingTime(false);
       setDraggingPracticeId(null);
@@ -1029,7 +1034,18 @@ export default function ClubCalendar({
               </div>
 
               <div className="space-y-2">
-                <p className="text-sm font-bold text-[color:var(--ink)]">Teams</p>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-bold text-[color:var(--ink)]">Teams</p>
+                  {teamOptions.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={toggleAllTeams}
+                      className="rounded-full border border-[color:var(--line)] px-3 py-1.5 text-xs font-bold text-[#1d4f91] transition hover:bg-[#eaf2ff]"
+                    >
+                      {visibleTeamCount > 0 ? "Clear all teams" : "Select all teams"}
+                    </button>
+                  )}
+                </div>
                 <div className="grid max-h-56 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {teamOptions.length === 0 ? (
                     <p className="text-sm text-[color:var(--muted)]">No teams yet.</p>

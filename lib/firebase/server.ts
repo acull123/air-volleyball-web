@@ -4,12 +4,8 @@ import {
   collection,
   doc,
   getDoc,
-  getDocs,
   getFirestore,
-  limit,
-  query,
   serverTimestamp,
-  where,
 } from "firebase/firestore";
 import type { EventDocument, RegistrationDocument } from "./schema";
 
@@ -57,20 +53,4 @@ export async function createRegistrationServer(
   });
 
   return ref.id;
-}
-
-export async function getRegistrationByPayPalOrderIdServer(orderId: string) {
-  const snapshot = await getDocs(
-    query(collection(getServerDb(), "registrations"), where("paymentOrderId", "==", orderId), limit(1)),
-  );
-  const match = snapshot.docs[0];
-
-  if (!match) {
-    return null;
-  }
-
-  return {
-    ...(match.data() as RegistrationDocument),
-    id: match.id,
-  } as RegistrationDocument;
 }

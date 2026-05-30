@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import type { GymSpaceDocument } from "@/lib/firebase/schema";
 
 const daysOfWeek = [
@@ -218,7 +218,7 @@ export default function GymSpaceManagerClient() {
 
       resetForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save gym space.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save gym space."));
     } finally {
       setSaving(false);
     }
@@ -241,7 +241,7 @@ export default function GymSpaceManagerClient() {
       }
       setStatus("Gym space deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete gym space.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete gym space."));
     }
   }
 

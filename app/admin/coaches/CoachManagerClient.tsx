@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import type { ClubEventType, CoachDocument } from "@/lib/firebase/schema";
 import { deletePhotoByUrl, uploadCoachPhoto } from "@/lib/firebase/storage";
 import { compareTeamsByAge } from "@/lib/team-sort";
@@ -250,7 +250,7 @@ export default function CoachManagerClient() {
 
       resetForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save coach.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save coach."));
     } finally {
       setSaving(false);
     }
@@ -273,7 +273,7 @@ export default function CoachManagerClient() {
       }
       setStatus("Coach deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete coach.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete coach."));
     }
   }
 

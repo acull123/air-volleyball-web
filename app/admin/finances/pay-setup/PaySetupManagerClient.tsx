@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { useAuthSession } from "@/lib/firebase/auth";
 import type { ClubEventType, CoachDocument, PayTypeDocument } from "@/lib/firebase/schema";
 
@@ -132,7 +132,7 @@ export default function PaySetupManagerClient() {
 
       resetPayTypeForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save pay type.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save pay type."));
     } finally {
       setSavingPayType(false);
     }
@@ -160,7 +160,7 @@ export default function PaySetupManagerClient() {
       }
       setStatus("Pay type deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete pay type.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete pay type."));
     }
   }
 
@@ -184,7 +184,7 @@ export default function PaySetupManagerClient() {
       });
       setStatus("Coach pay types updated.");
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Unable to update coach pay types.");
+      setError(getFriendlyFirebaseError(updateError, "Unable to update coach pay types."));
     }
   }
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import PageHero from "../components/PageHero";
 import SectionCard from "../components/SectionCard";
 import { hasAnyRole, isRole, signInUser, useAuthSession } from "@/lib/firebase/auth";
+import { getFriendlyFirebaseError } from "@/lib/firebase/errors";
 
 export default function AdminGate() {
   const router = useRouter();
@@ -31,7 +32,7 @@ export default function AdminGate() {
     try {
       await signInUser(email, password);
     } catch (error) {
-      setSubmitError(error instanceof Error ? error.message : "Unable to sign in.");
+      setSubmitError(getFriendlyFirebaseError(error, "Unable to sign in."));
     } finally {
       setSubmitting(false);
     }

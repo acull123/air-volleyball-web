@@ -4,7 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { formatEventStatus, getEventStatus } from "@/lib/event-status";
 import { getEventTeamLabel, getEventTeamSchedules } from "@/lib/event-teams";
 import { compareAthletesByName } from "@/lib/player-name";
@@ -309,7 +309,7 @@ export default function EventManagerClient() {
           .filter((entry) => entry.teamId),
         ageGroup: isPractice || isTournament ? "" : draft.ageGroup,
         price: isPractice ? 0 : draft.price.trim() ? Number(draft.price) : 0,
-        paymentUrl: isPractice || isTournament ? "" : draft.paymentUrl.trim(),
+        paymentUrl: "",
         externalUrl: isPractice || isCamp ? "" : draft.externalUrl.trim(),
         startDate: draft.startDate,
         endDate: isPractice ? practiceEndDate : normalizedEndDate,
@@ -356,7 +356,7 @@ export default function EventManagerClient() {
 
       resetForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save event.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save event."));
     } finally {
       setSaving(false);
     }
@@ -379,7 +379,7 @@ export default function EventManagerClient() {
       }
       setStatus("Event deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete event.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete event."));
     }
   }
 
@@ -540,17 +540,6 @@ export default function EventManagerClient() {
                     placeholder="0.00"
                   />
                 </label>
-                {!isTournamentType(draft.type) && (
-                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                    Payment link
-                    <input
-                      value={draft.paymentUrl}
-                      onChange={(event) => setDraft((current) => ({ ...current, paymentUrl: event.target.value }))}
-                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                      placeholder="Paste a hosted payment link"
-                    />
-                  </label>
-                )}
                 {draft.type !== "camp" && (
                   <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
                     External link
@@ -803,7 +792,7 @@ export default function EventManagerClient() {
                         Location: {event.location}
                       </p>
                       <p className="text-sm text-[color:var(--muted)]">
-                        Payment: {event.paymentUrl ? "Ready" : event.price > 0 ? "Link needed" : "No payment needed"}
+                        Payment: {event.price > 0 ? "Offline tracking" : "No payment needed"}
                       </p>
                       <p className="text-sm text-[color:var(--muted)]">
                         External link: {event.externalUrl ? "Ready" : "Not set"}

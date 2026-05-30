@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { useAuthSession } from "@/lib/firebase/auth";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import type { UserDocument, UserRole } from "@/lib/firebase/schema";
 import { compareTeamsByAge } from "@/lib/team-sort";
 
@@ -152,7 +152,7 @@ export default function UserSetupManagerClient() {
       });
       setMessage("Account updated.");
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Unable to update account.");
+      setError(getFriendlyFirebaseError(updateError, "Unable to update account."));
     } finally {
       setSavingUserId(null);
     }
@@ -280,7 +280,7 @@ export default function UserSetupManagerClient() {
       );
       setCoachSetupUserId(null);
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Unable to verify coach account.");
+      setError(getFriendlyFirebaseError(updateError, "Unable to verify coach account."));
     } finally {
       setSavingUserId(null);
     }
@@ -299,7 +299,7 @@ export default function UserSetupManagerClient() {
       await firestoreApi.coaches.update(coachId, { active });
       setMessage(active ? "Coach profile activated." : "Coach profile deactivated.");
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Unable to update coach profile.");
+      setError(getFriendlyFirebaseError(updateError, "Unable to update coach profile."));
     } finally {
       setSavingCoachId(null);
     }

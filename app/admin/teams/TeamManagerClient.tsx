@@ -2,13 +2,14 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { Timestamp } from "firebase/firestore";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { getEventTeamSchedules } from "@/lib/event-teams";
 import { comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
-import type { CoachDocument, TeamDocument } from "@/lib/firebase/schema";
+import type { CoachDocument, InvoiceDocument, InvoiceStatus, TeamDocument } from "@/lib/firebase/schema";
 
 type TeamDraft = {
   name: string;
@@ -88,6 +89,7 @@ export default function TeamManagerClient() {
   const players = useFirestoreCollection("players");
   const coaches = useFirestoreCollection("coaches");
   const events = useFirestoreCollection("events");
+  const invoices = useFirestoreCollection("invoices");
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [playerFilter, setPlayerFilter] = useState("");
@@ -96,6 +98,7 @@ export default function TeamManagerClient() {
   const [selectedPhotoName, setSelectedPhotoName] = useState("");
   const [saving, setSaving] = useState(false);
   const [clearingTeamId, setClearingTeamId] = useState<string | null>(null);
+  const [updatingPaymentKey, setUpdatingPaymentKey] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -325,7 +328,7 @@ export default function TeamManagerClient() {
       setStatus(selectedTeamId ? "Team updated." : "Team created.");
       resetForm();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save team.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save team."));
     } finally {
       setSaving(false);
     }
@@ -363,7 +366,7 @@ export default function TeamManagerClient() {
 
       setStatus("Team deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete team.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete team."));
     }
   }
 
@@ -423,9 +426,59 @@ export default function TeamManagerClient() {
 
       setStatus(`${team.name} season data cleared.`);
     } catch (clearError) {
-      setError(clearError instanceof Error ? clearError.message : "Unable to clear team season data.");
+      setError(getFriendlyFirebaseError(clearError, "Unable to clear team season data."));
     } finally {
       setClearingTeamId(null);
+    }
+  }
+
+  function getTeamPayment(teamId: string, playerId: string): InvoiceDocument | null {
+    return (
+      invoices.data.find(
+        (invoice) => invoice.teamId === teamId && invoice.playerId === playerId,
+      ) ?? null
+    );
+  }
+
+  async function updateTeamPlayerPayment(
+    team: TeamDocument,
+    player: { id: string; firstName: string; lastName: string },
+    nextStatus: Extract<InvoiceStatus, "paid" | "unpaid">,
+  ) {
+    const paymentKey = `${team.id}:${player.id}`;
+    setUpdatingPaymentKey(paymentKey);
+    setStatus(null);
+    setError(null);
+
+    try {
+      const existingPayment = getTeamPayment(team.id, player.id);
+      const paidAt = nextStatus === "paid" ? Timestamp.now() : null;
+
+      if (existingPayment) {
+        await firestoreApi.invoices.update(existingPayment.id, {
+          status: nextStatus,
+          paidAt,
+        });
+      } else {
+        await firestoreApi.invoices.create({
+          userId: "",
+          playerId: player.id,
+          teamId: team.id,
+          title: `${team.name} Team Payment`,
+          description: `Team payment status for ${player.firstName} ${player.lastName}.`,
+          amount: 0,
+          dueDate: null,
+          status: nextStatus,
+          paymentUrl: "",
+          paidAt,
+        });
+      }
+
+      setStatus(`${player.firstName} ${player.lastName} marked ${nextStatus} for ${team.name}.`);
+    } catch (paymentError) {
+      setError(getFriendlyFirebaseError(paymentError, "Unable to update team payment."));
+    } finally {
+      setUpdatingPaymentKey(null);
     }
   }
 
@@ -690,6 +743,55 @@ export default function TeamManagerClient() {
                       <p className="text-sm text-[color:var(--muted)]">
                         Players: {teamPlayers.length ? teamPlayers.map((player) => `${player.firstName} ${player.lastName}`).join(", ") : "No players assigned"}
                       </p>
+                      {teamPlayers.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                            Team payments
+                          </p>
+                          {invoices.loading ? (
+                            <p className="text-sm text-[color:var(--muted)]">Loading payment statuses...</p>
+                          ) : invoices.error ? (
+                            <p className="text-sm text-[color:var(--muted)]">Payment statuses are unavailable right now.</p>
+                          ) : (
+                            <div className="grid gap-2">
+                              {teamPlayers.map((player) => {
+                                const payment = getTeamPayment(team.id, player.id);
+                                const paymentStatus = payment?.status === "paid" ? "paid" : "unpaid";
+                                const nextStatus = paymentStatus === "paid" ? "unpaid" : "paid";
+                                const paymentKey = `${team.id}:${player.id}`;
+
+                                return (
+                                  <div
+                                    key={player.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[color:var(--paper)] px-3 py-2 text-sm"
+                                  >
+                                    <span className="font-medium text-[color:var(--ink)]">
+                                      {player.firstName} {player.lastName}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                                        {paymentStatus}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        disabled={updatingPaymentKey === paymentKey}
+                                        onClick={() => void updateTeamPlayerPayment(team, player, nextStatus)}
+                                        className="rounded-full border border-[color:var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {updatingPaymentKey === paymentKey
+                                          ? "Saving..."
+                                          : paymentStatus === "paid"
+                                            ? "Mark unpaid"
+                                            : "Mark paid"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <p className="text-sm text-[color:var(--muted)]">
                         Coaches: {teamCoaches.length ? teamCoaches.map((coach) => `${coach.firstName} ${coach.lastName}`).join(", ") : "No coaches assigned"}
                       </p>

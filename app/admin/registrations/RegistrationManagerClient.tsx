@@ -5,10 +5,11 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { useAuthSession } from "@/lib/firebase/auth";
 import { compareAthletesByName, comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
+import type { PaymentStatus } from "@/lib/firebase/schema";
 
 function formatMoney(amount: number) {
   return new Intl.NumberFormat("en-US", {
@@ -164,24 +165,24 @@ export default function RegistrationManagerClient() {
       setParentName("");
       setPlayerSearchTerm("");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to save registration.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to save registration."));
     } finally {
       setSaving(false);
     }
   }
 
-  async function markRegistrationPaid(registrationId: string) {
+  async function updateRegistrationPaymentStatus(registrationId: string, paymentStatus: PaymentStatus) {
     setUpdatingRegistrationId(registrationId);
     setStatus(null);
     setError(null);
 
     try {
       await firestoreApi.registrations.update(registrationId, {
-        paymentStatus: "paid",
+        paymentStatus,
       });
-      setStatus("Registration marked paid.");
+      setStatus(`Registration marked ${paymentStatus}.`);
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : "Unable to update registration.");
+      setError(getFriendlyFirebaseError(updateError, "Unable to update registration."));
     } finally {
       setUpdatingRegistrationId(null);
     }
@@ -202,7 +203,7 @@ export default function RegistrationManagerClient() {
       await firestoreApi.registrations.remove(registrationId);
       setStatus("Registration removed.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete registration.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete registration."));
     } finally {
       setUpdatingRegistrationId(null);
     }
@@ -312,14 +313,19 @@ export default function RegistrationManagerClient() {
                             >
                               View player info
                             </Link>
-                            {isAdmin && registration.paymentStatus !== "paid" && (
+                            {isAdmin && (
                               <button
                                 type="button"
                                 disabled={isUpdating}
-                                onClick={() => void markRegistrationPaid(registration.id)}
+                                onClick={() =>
+                                  void updateRegistrationPaymentStatus(
+                                    registration.id,
+                                    registration.paymentStatus === "paid" ? "unpaid" : "paid",
+                                  )
+                                }
                                 className="rounded-full border border-[color:var(--line)] px-3 py-2 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
                               >
-                                Mark paid
+                                {registration.paymentStatus === "paid" ? "Mark unpaid" : "Mark paid"}
                               </button>
                             )}
                             {isAdmin && (

@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import SectionCard from "../components/SectionCard";
-import { firestoreApi, type UserRole, useFirestoreCollection } from "@/lib/firebase";
+import { firestoreApi, type UserRole, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 
 const roleOptions: UserRole[] = ["admin", "coach", "parent", "player"];
 
@@ -43,7 +43,7 @@ export default function AccessManager() {
       // and then create the matching role/profile record in the database.
       setMessage("New account setup will be connected here next.");
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to continue.");
+      setError(getFriendlyFirebaseError(submitError, "Unable to continue."));
     } finally {
       setSaving(false);
     }
@@ -65,7 +65,7 @@ export default function AccessManager() {
       await firestoreApi.users.remove(targetUid);
       setMessage("Access profile deleted.");
     } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : "Unable to delete access profile.");
+      setError(getFriendlyFirebaseError(deleteError, "Unable to delete access profile."));
     }
   }
 
