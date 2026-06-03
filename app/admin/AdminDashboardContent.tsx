@@ -41,16 +41,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
           </Link>
 
           <Link
-            href="/admin/player-exports"
-            className={clickableCardClass}
-          >
-            <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Player exports</h2>
-            <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-              Print camp and tryout player signup lists with full registration details.
-            </p>
-          </Link>
-
-          <Link
             href="/admin/teams"
             className={clickableCardClass}
           >
@@ -96,6 +86,16 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
               </div>
             )
           ))}
+
+          <Link
+            href="/admin/player-exports"
+            className={clickableCardClass}
+          >
+            <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Player exports</h2>
+            <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+              Download camp and tryout player signup spreadsheets with full registration details.
+            </p>
+          </Link>
         </div>
       </SectionCard>
 
