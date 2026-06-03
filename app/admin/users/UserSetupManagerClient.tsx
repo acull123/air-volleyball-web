@@ -5,7 +5,7 @@ import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { useAuthSession } from "@/lib/firebase/auth";
 import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
-import type { UserDocument, UserRole } from "@/lib/firebase/schema";
+import type { PlayerDocument, UserDocument, UserRole } from "@/lib/firebase/schema";
 import { compareTeamsByAge } from "@/lib/team-sort";
 
 type RoleSelection = UserRole | "inactive";
@@ -22,6 +22,32 @@ type CoachSetupDraft = {
 };
 
 const roleOptions: RoleSelection[] = ["admin", "coach", "unverifiedCoach", "parent", "player", "inactive"];
+const roleBadgeClasses: Record<RoleSelection, { selected: string; unselected: string }> = {
+  admin: {
+    selected: "bg-[#fef3c7] text-[#7a4b00]",
+    unselected: "bg-[#fef3c7] text-[#92400e]",
+  },
+  coach: {
+    selected: "bg-[#dcfce7] text-[#14532d]",
+    unselected: "bg-[#dcfce7] text-[#166534]",
+  },
+  unverifiedCoach: {
+    selected: "bg-[#ffedd5] text-[#7c2d12]",
+    unselected: "bg-[#ffedd5] text-[#9a3412]",
+  },
+  parent: {
+    selected: "bg-[#dbeafe] text-[#1e3a8a]",
+    unselected: "bg-[#dbeafe] text-[#1d4ed8]",
+  },
+  player: {
+    selected: "bg-[#ede9fe] text-[#4c1d95]",
+    unselected: "bg-[#ede9fe] text-[#6d28d9]",
+  },
+  inactive: {
+    selected: "bg-[#ffe4e6] text-[#881337]",
+    unselected: "bg-[#ffe4e6] text-[#be123c]",
+  },
+};
 
 const emptyCoachSetupDraft: CoachSetupDraft = {
   role: "coach",
@@ -55,12 +81,19 @@ function getRoleSelection(user: UserDocument): RoleSelection {
   return getUserActive(user) ? user.role : "inactive";
 }
 
+function isPlayerDocument(player: PlayerDocument | undefined): player is PlayerDocument {
+  return Boolean(player);
+}
+
 export default function UserSetupManagerClient() {
   const access = useAuthSession();
   const users = useFirestoreCollection("users", {
     enabled: access.authUser?.profile?.role === "admin",
   });
   const coaches = useFirestoreCollection("coaches", {
+    enabled: access.authUser?.profile?.role === "admin",
+  });
+  const players = useFirestoreCollection("players", {
     enabled: access.authUser?.profile?.role === "admin",
   });
   const teams = useFirestoreCollection("teams", {
@@ -76,6 +109,7 @@ export default function UserSetupManagerClient() {
   const [adminCoachChoiceUserId, setAdminCoachChoiceUserId] = useState<string | null>(null);
   const [coachSetupDraft, setCoachSetupDraft] = useState<CoachSetupDraft>(emptyCoachSetupDraft);
   const [pendingRoleByUserId, setPendingRoleByUserId] = useState<Record<string, RoleSelection>>({});
+  const [userSearchTerm, setUserSearchTerm] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,6 +131,27 @@ export default function UserSetupManagerClient() {
       }),
     [users.data],
   );
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = userSearchTerm.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return sortedUsers;
+    }
+
+    return sortedUsers.filter((user) =>
+      [
+        user.firstName,
+        user.lastName,
+        user.email,
+        user.phone,
+        formatRole(getRoleSelection(user)),
+        getUserActive(user) ? "active" : "inactive",
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedSearch),
+    );
+  }, [sortedUsers, userSearchTerm]);
   const sortedCoaches = useMemo(
     () =>
       [...coaches.data].sort((left, right) =>
@@ -105,9 +160,23 @@ export default function UserSetupManagerClient() {
     [coaches.data],
   );
   const selectedUser = useMemo(
-    () => sortedUsers.find((user) => user.id === selectedUserId) ?? sortedUsers[0] ?? null,
-    [selectedUserId, sortedUsers],
+    () => sortedUsers.find((user) => user.id === selectedUserId) ?? filteredUsers[0] ?? sortedUsers[0] ?? null,
+    [filteredUsers, selectedUserId, sortedUsers],
   );
+  const selectedLinkedPlayers = useMemo(() => {
+    const playerIds = selectedUser?.playerIds ?? [];
+
+    if (playerIds.length === 0) {
+      return [];
+    }
+
+    return playerIds
+      .map((playerId) => players.data.find((player) => player.id === playerId))
+      .filter(isPlayerDocument)
+      .sort((left, right) =>
+        `${left.lastName} ${left.firstName}`.localeCompare(`${right.lastName} ${right.firstName}`),
+      );
+  }, [players.data, selectedUser?.playerIds]);
   const adminCoachChoiceUser = adminCoachChoiceUserId
     ? sortedUsers.find((user) => user.id === adminCoachChoiceUserId) ?? null
     : null;
@@ -407,8 +476,23 @@ export default function UserSetupManagerClient() {
             </div>
           ) : (
             <div className="space-y-3">
-              {sortedUsers.map((user) => {
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Search accounts
+                <input
+                  value={userSearchTerm}
+                  onChange={(event) => setUserSearchTerm(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Search by name, email, phone, or role"
+                />
+              </label>
+              {filteredUsers.length === 0 && (
+                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  No accounts match the current search.
+                </div>
+              )}
+              {filteredUsers.map((user) => {
                 const userActive = getUserActive(user);
+                const roleSelection = getRoleSelection(user);
                 const isSelected = selectedUser?.id === user.id;
 
                 return (
@@ -435,13 +519,9 @@ export default function UserSetupManagerClient() {
                       </p>
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] ${
-                          userActive
-                            ? isSelected
-                              ? "bg-white/15 text-white"
-                              : "bg-emerald-50 text-emerald-700"
-                            : isSelected
-                              ? "bg-white/15 text-white"
-                              : "bg-rose-50 text-rose-700"
+                          isSelected
+                            ? roleBadgeClasses[roleSelection].selected
+                            : roleBadgeClasses[roleSelection].unselected
                         }`}
                       >
                         {userActive ? formatRole(user.role) : "Inactive"}
@@ -487,6 +567,41 @@ export default function UserSetupManagerClient() {
                     ))}
                   </select>
                 </label>
+              </div>
+
+              <div className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-5">
+                <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                  Linked Players
+                </p>
+                {players.loading || teams.loading ? (
+                  <p className="mt-4 text-sm text-[color:var(--muted)]">Loading linked players...</p>
+                ) : players.error || teams.error ? (
+                  <p className="mt-4 text-sm text-[color:var(--muted)]">Linked players are unavailable right now.</p>
+                ) : selectedLinkedPlayers.length === 0 ? (
+                  <p className="mt-4 text-sm text-[color:var(--muted)]">No players are linked to this account.</p>
+                ) : (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {selectedLinkedPlayers.map((player) => {
+                      const teamName =
+                        teams.data.find((team) => team.id === player.teamId)?.name ?? "No team assigned";
+
+                      return (
+                        <div
+                          key={player.id}
+                          className="rounded-2xl bg-[color:var(--paper)] px-4 py-4"
+                        >
+                          <p className="font-semibold text-[color:var(--ink)]">
+                            {player.firstName} {player.lastName}
+                          </p>
+                          <p className="mt-1 text-sm text-[color:var(--muted)]">
+                            {teamName}
+                            {player.position ? ` · ${player.position}` : ""}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               {coachSetupUserId === selectedUser.id && (

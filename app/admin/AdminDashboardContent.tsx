@@ -38,9 +38,16 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Add, edit, and remove player records for current rosters.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open player manager
-            </div>
+          </Link>
+
+          <Link
+            href="/admin/player-exports"
+            className={clickableCardClass}
+          >
+            <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Player exports</h2>
+            <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+              Print camp and tryout player signup lists with full registration details.
+            </p>
           </Link>
 
           <Link
@@ -51,9 +58,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Add, edit, and remove teams while assigning players and coaches.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open team manager
-            </div>
           </Link>
 
           <Link
@@ -64,9 +68,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Add, edit, and remove coach records for current staff.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open coach manager
-            </div>
           </Link>
 
           {adminTasks.map((task) => (
@@ -78,9 +79,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
               >
                 <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">{task.title}</h2>
                 <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">{task.detail}</p>
-                <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-                  {task.actionLabel}
-                </div>
               </Link>
             ) : (
               <div
@@ -111,9 +109,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               View events and conflicts together in a monthly scheduling calendar.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open calendar
-            </div>
           </Link>
 
           <Link
@@ -124,9 +119,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Create tournaments, camps, tryouts, and published team events.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open event manager
-            </div>
           </Link>
 
           <Link
@@ -137,9 +129,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Track facilities, courts, and available practice windows.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open gym manager
-            </div>
           </Link>
 
           <Link
@@ -150,9 +139,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Review blocked times submitted by players and families.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open conflict manager
-            </div>
           </Link>
 
           <Link
@@ -163,9 +149,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Set team practice needs and review suggested time slots.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open practice planner
-            </div>
           </Link>
         </div>
       </SectionCard>
@@ -182,9 +165,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
                 ? "Review coach expense reports and accept, reject, or pay pending submissions."
                 : "Submit expense reports and review the status of your submissions."}
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open expense reports
-            </div>
           </Link>
           {isAdmin && (
             <Link
@@ -195,9 +175,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
               <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
                 Manage pay types, default coach assignments, and event type matching.
               </p>
-              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-                Open pay setup
-              </div>
             </Link>
           )}
         </div>
@@ -213,9 +190,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
               Placeholder for future club dashboard views.
             </p>
-            <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-              Open dashboards
-            </div>
           </Link>
         </div>
       </SectionCard>
@@ -231,9 +205,6 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
               <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
                 Review self-created accounts, update roles, link coaches, and mark accounts inactive.
               </p>
-              <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] group-hover:border-white/30 group-hover:text-white">
-                Open account editor
-              </div>
             </Link>
           </div>
         </SectionCard>

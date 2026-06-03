@@ -23,17 +23,35 @@ type NewPlayerDraft = {
   shirtSize: string;
   email: string;
   grade: string;
+  height: string;
   position: string;
+  secondaryPosition: string;
   guardianFirstName: string;
   guardianLastName: string;
   guardianEmail: string;
   phone: string;
   guardianPhone: string;
+  guardianAddressDifferent: boolean;
+  guardianAddressStreet: string;
+  guardianAddressCity: string;
+  guardianAddressState: string;
+  guardianAddressZip: string;
+  guardian2FirstName: string;
+  guardian2LastName: string;
+  guardian2Phone: string;
+  guardian2Email: string;
   addressStreet: string;
   addressCity: string;
   addressState: string;
   addressZip: string;
+  emergencyContactName: string;
+  emergencyContactRelationship: string;
+  emergencyContactPhone: string;
+  medicalConditions: string;
   medications: string;
+  concussionDiagnosedPast24Months: string;
+  concussionDiagnosisDate: string;
+  allergies: string;
 };
 
 const emptyNewPlayerDraft: NewPlayerDraft = {
@@ -44,17 +62,35 @@ const emptyNewPlayerDraft: NewPlayerDraft = {
   shirtSize: "",
   email: "",
   grade: "",
+  height: "",
   position: "",
+  secondaryPosition: "",
   guardianFirstName: "",
   guardianLastName: "",
   guardianEmail: "",
   phone: "",
   guardianPhone: "",
+  guardianAddressDifferent: false,
+  guardianAddressStreet: "",
+  guardianAddressCity: "",
+  guardianAddressState: "",
+  guardianAddressZip: "",
+  guardian2FirstName: "",
+  guardian2LastName: "",
+  guardian2Phone: "",
+  guardian2Email: "",
   addressStreet: "",
   addressCity: "",
   addressState: "",
   addressZip: "",
+  emergencyContactName: "",
+  emergencyContactRelationship: "",
+  emergencyContactPhone: "",
+  medicalConditions: "",
   medications: "",
+  concussionDiagnosedPast24Months: "",
+  concussionDiagnosisDate: "",
+  allergies: "",
 };
 
 const nextSteps = [
@@ -303,16 +339,45 @@ function RegisterPageContent() {
           shirtSize: registrationMode === "new" ? draftTrim(newPlayer.shirtSize) : "",
           email: registrationMode === "new" ? draftTrim(newPlayer.email) : "",
           grade: registrationMode === "new" ? draftTrim(newPlayer.grade) : "",
+          height: registrationMode === "new" ? draftTrim(newPlayer.height) : "",
           guardianFirstName: registrationMode === "new" ? draftTrim(newPlayer.guardianFirstName) : "",
           guardianLastName: registrationMode === "new" ? draftTrim(newPlayer.guardianLastName) : "",
           guardianEmail: registrationMode === "new" ? draftTrim(newPlayer.guardianEmail) : "",
           phone: registrationMode === "new" ? draftTrim(newPlayer.phone) : "",
           guardianPhone: registrationMode === "new" ? draftTrim(newPlayer.guardianPhone) : "",
+          guardianAddressDifferent:
+            registrationMode === "new" ? newPlayer.guardianAddressDifferent : false,
+          guardianAddressStreet:
+            registrationMode === "new" ? draftTrim(newPlayer.guardianAddressStreet) : "",
+          guardianAddressCity:
+            registrationMode === "new" ? draftTrim(newPlayer.guardianAddressCity) : "",
+          guardianAddressState:
+            registrationMode === "new" ? draftTrim(newPlayer.guardianAddressState) : "",
+          guardianAddressZip:
+            registrationMode === "new" ? draftTrim(newPlayer.guardianAddressZip) : "",
+          guardian2FirstName: registrationMode === "new" ? draftTrim(newPlayer.guardian2FirstName) : "",
+          guardian2LastName: registrationMode === "new" ? draftTrim(newPlayer.guardian2LastName) : "",
+          guardian2Phone: registrationMode === "new" ? draftTrim(newPlayer.guardian2Phone) : "",
+          guardian2Email: registrationMode === "new" ? draftTrim(newPlayer.guardian2Email) : "",
           addressStreet: registrationMode === "new" ? draftTrim(newPlayer.addressStreet) : "",
           addressCity: registrationMode === "new" ? draftTrim(newPlayer.addressCity) : "",
           addressState: registrationMode === "new" ? draftTrim(newPlayer.addressState) : "",
           addressZip: registrationMode === "new" ? draftTrim(newPlayer.addressZip) : "",
+          emergencyContactName:
+            registrationMode === "new" ? draftTrim(newPlayer.emergencyContactName) : "",
+          emergencyContactRelationship:
+            registrationMode === "new" ? draftTrim(newPlayer.emergencyContactRelationship) : "",
+          emergencyContactPhone:
+            registrationMode === "new" ? draftTrim(newPlayer.emergencyContactPhone) : "",
+          medicalConditions: registrationMode === "new" ? draftTrim(newPlayer.medicalConditions) : "",
           medications: registrationMode === "new" ? draftTrim(newPlayer.medications) : "",
+          concussionDiagnosedPast24Months:
+            registrationMode === "new" ? draftTrim(newPlayer.concussionDiagnosedPast24Months) : "",
+          concussionDiagnosisDate:
+            registrationMode === "new" ? draftTrim(newPlayer.concussionDiagnosisDate) : "",
+          allergies: registrationMode === "new" ? draftTrim(newPlayer.allergies) : "",
+          secondaryPosition: registrationMode === "new" ? draftTrim(newPlayer.secondaryPosition) : "",
+          registrationTimestamp: new Date().toISOString(),
         }
       : null;
 
@@ -349,18 +414,37 @@ function RegisterPageContent() {
       shirtSize: registrationPayload.shirtSize,
       email: registrationPayload.email,
       grade: registrationPayload.grade,
+      height: registrationPayload.height,
       guardianFirstName: registrationPayload.guardianFirstName,
       guardianLastName: registrationPayload.guardianLastName,
       guardianEmail: registrationPayload.guardianEmail,
       phone: registrationPayload.phone,
       guardianPhone: registrationPayload.guardianPhone,
+      guardianAddressDifferent: registrationPayload.guardianAddressDifferent,
+      guardianAddressStreet: registrationPayload.guardianAddressStreet,
+      guardianAddressCity: registrationPayload.guardianAddressCity,
+      guardianAddressState: registrationPayload.guardianAddressState,
+      guardianAddressZip: registrationPayload.guardianAddressZip,
+      guardian2FirstName: registrationPayload.guardian2FirstName,
+      guardian2LastName: registrationPayload.guardian2LastName,
+      guardian2Phone: registrationPayload.guardian2Phone,
+      guardian2Email: registrationPayload.guardian2Email,
       addressStreet: registrationPayload.addressStreet,
       addressCity: registrationPayload.addressCity,
       addressState: registrationPayload.addressState,
       addressZip: registrationPayload.addressZip,
+      emergencyContactName: registrationPayload.emergencyContactName,
+      emergencyContactRelationship: registrationPayload.emergencyContactRelationship,
+      emergencyContactPhone: registrationPayload.emergencyContactPhone,
+      medicalConditions: registrationPayload.medicalConditions,
       medications: registrationPayload.medications,
+      concussionDiagnosedPast24Months: registrationPayload.concussionDiagnosedPast24Months,
+      concussionDiagnosisDate: registrationPayload.concussionDiagnosisDate,
+      allergies: registrationPayload.allergies,
+      registrationTimestamp: registrationPayload.registrationTimestamp,
       college: "",
       position: registrationPayload.position,
+      secondaryPosition: registrationPayload.secondaryPosition,
       jerseyNumber: 0,
       teamId: "",
       bio: "",
@@ -397,16 +481,35 @@ function RegisterPageContent() {
       shirtSize: registrationPayload.shirtSize,
       email: registrationPayload.email,
       grade: registrationPayload.grade,
+      height: registrationPayload.height,
       guardianFirstName: registrationPayload.guardianFirstName,
       guardianLastName: registrationPayload.guardianLastName,
       guardianEmail: registrationPayload.guardianEmail,
       phone: registrationPayload.phone,
       guardianPhone: registrationPayload.guardianPhone,
+      guardianAddressDifferent: registrationPayload.guardianAddressDifferent,
+      guardianAddressStreet: registrationPayload.guardianAddressStreet,
+      guardianAddressCity: registrationPayload.guardianAddressCity,
+      guardianAddressState: registrationPayload.guardianAddressState,
+      guardianAddressZip: registrationPayload.guardianAddressZip,
+      guardian2FirstName: registrationPayload.guardian2FirstName,
+      guardian2LastName: registrationPayload.guardian2LastName,
+      guardian2Phone: registrationPayload.guardian2Phone,
+      guardian2Email: registrationPayload.guardian2Email,
       addressStreet: registrationPayload.addressStreet,
       addressCity: registrationPayload.addressCity,
       addressState: registrationPayload.addressState,
       addressZip: registrationPayload.addressZip,
+      emergencyContactName: registrationPayload.emergencyContactName,
+      emergencyContactRelationship: registrationPayload.emergencyContactRelationship,
+      emergencyContactPhone: registrationPayload.emergencyContactPhone,
+      medicalConditions: registrationPayload.medicalConditions,
       medications: registrationPayload.medications,
+      concussionDiagnosedPast24Months: registrationPayload.concussionDiagnosedPast24Months,
+      concussionDiagnosisDate: registrationPayload.concussionDiagnosisDate,
+      allergies: registrationPayload.allergies,
+      secondaryPosition: registrationPayload.secondaryPosition,
+      registrationTimestamp: registrationPayload.registrationTimestamp,
       paymentProvider: "",
       paymentOrderId: "",
       paymentCaptureId: "",
@@ -559,7 +662,7 @@ function RegisterPageContent() {
               </p>
               <Link
                 href="/login"
-                className="mt-4 inline-flex rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66]"
+                className="mt-4 inline-flex rounded-full bg-[color:var(--accent)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[#ffc469]"
               >
                 Sign In Or Create Account
               </Link>
@@ -716,7 +819,18 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Position
+                      Height
+                      <input
+                        value={draftText(newPlayer.height)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, height: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                        placeholder={'5\'8"'}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Primary position
                       <input
                         value={draftText(newPlayer.position)}
                         onChange={(event) =>
@@ -724,6 +838,17 @@ function RegisterPageContent() {
                         }
                         className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                         placeholder="Outside, setter, libero..."
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Secondary position
+                      <input
+                        value={draftText(newPlayer.secondaryPosition)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, secondaryPosition: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                        placeholder="Optional"
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
@@ -825,8 +950,121 @@ function RegisterPageContent() {
                         className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                       />
                     </label>
+                    <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm font-semibold text-[color:var(--ink)]">
+                      <input
+                        type="checkbox"
+                        checked={newPlayer.guardianAddressDifferent}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({
+                            ...current,
+                            guardianAddressDifferent: event.target.checked,
+                          }))
+                        }
+                      />
+                      Guardian address is different than the player&apos;s address
+                    </label>
+                    {newPlayer.guardianAddressDifferent && (
+                      <>
+                        <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                          Guardian street address
+                          <input
+                            value={draftText(newPlayer.guardianAddressStreet)}
+                            onChange={(event) =>
+                              setNewPlayer((current) => ({
+                                ...current,
+                                guardianAddressStreet: event.target.value,
+                              }))
+                            }
+                            className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                          Guardian city
+                          <input
+                            value={draftText(newPlayer.guardianAddressCity)}
+                            onChange={(event) =>
+                              setNewPlayer((current) => ({
+                                ...current,
+                                guardianAddressCity: event.target.value,
+                              }))
+                            }
+                            className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                          Guardian state
+                          <input
+                            value={draftText(newPlayer.guardianAddressState)}
+                            onChange={(event) =>
+                              setNewPlayer((current) => ({
+                                ...current,
+                                guardianAddressState: event.target.value,
+                              }))
+                            }
+                            className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                          Guardian ZIP
+                          <input
+                            value={draftText(newPlayer.guardianAddressZip)}
+                            onChange={(event) =>
+                              setNewPlayer((current) => ({
+                                ...current,
+                                guardianAddressZip: event.target.value,
+                              }))
+                            }
+                            className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                          />
+                        </label>
+                      </>
+                    )}
                     <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                      Address and medical
+                      Guardian 2
+                    </p>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Guardian 2 first name
+                      <input
+                        value={draftText(newPlayer.guardian2FirstName)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardian2FirstName: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Guardian 2 last name
+                      <input
+                        value={draftText(newPlayer.guardian2LastName)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardian2LastName: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Guardian 2 phone
+                      <input
+                        value={draftText(newPlayer.guardian2Phone)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardian2Phone: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Guardian 2 email
+                      <input
+                        type="email"
+                        value={draftText(newPlayer.guardian2Email)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, guardian2Email: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                      Player address
                     </p>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
                       Street address
@@ -868,12 +1106,101 @@ function RegisterPageContent() {
                         className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                       />
                     </label>
+                    <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                      Emergency Contact / Medical Information
+                    </p>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Emergency contact name
+                      <input
+                        value={draftText(newPlayer.emergencyContactName)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, emergencyContactName: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Relationship to participant
+                      <input
+                        value={draftText(newPlayer.emergencyContactRelationship)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({
+                            ...current,
+                            emergencyContactRelationship: event.target.value,
+                          }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Emergency contact primary phone
+                      <input
+                        value={draftText(newPlayer.emergencyContactPhone)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, emergencyContactPhone: event.target.value }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Concussion diagnosed in past 24 months?
+                      <select
+                        value={draftText(newPlayer.concussionDiagnosedPast24Months)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({
+                            ...current,
+                            concussionDiagnosedPast24Months: event.target.value,
+                          }))
+                        }
+                        className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      >
+                        <option value="">Select one</option>
+                        <option value="yes">Yes</option>
+                        <option value="no">No</option>
+                      </select>
+                    </label>
+                    {newPlayer.concussionDiagnosedPast24Months === "yes" && (
+                      <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                        Concussion diagnosis date (month/year)
+                        <input
+                          value={draftText(newPlayer.concussionDiagnosisDate)}
+                          onChange={(event) =>
+                            setNewPlayer((current) => ({
+                              ...current,
+                              concussionDiagnosisDate: event.target.value,
+                            }))
+                          }
+                          className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                          placeholder="MM/YYYY"
+                        />
+                      </label>
+                    )}
+                    <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Medical conditions we should be aware of
+                      <textarea
+                        value={draftText(newPlayer.medicalConditions)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, medicalConditions: event.target.value }))
+                        }
+                        className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
                     <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
                       Medications
                       <textarea
                         value={draftText(newPlayer.medications)}
                         onChange={(event) =>
                           setNewPlayer((current) => ({ ...current, medications: event.target.value }))
+                        }
+                        className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      />
+                    </label>
+                    <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                      Allergies
+                      <textarea
+                        value={draftText(newPlayer.allergies)}
+                        onChange={(event) =>
+                          setNewPlayer((current) => ({ ...current, allergies: event.target.value }))
                         }
                         className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
                       />

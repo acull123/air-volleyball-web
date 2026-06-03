@@ -53,7 +53,6 @@ export default function RegistrationManagerClient() {
   const registrations = useFirestoreCollection("registrations");
   const [selectedEventId, setSelectedEventId] = useState(initialEventId);
   const [selectedPlayerId, setSelectedPlayerId] = useState("");
-  const [parentName, setParentName] = useState("");
   const [playerSearchTerm, setPlayerSearchTerm] = useState("");
   const [saving, setSaving] = useState(false);
   const [updatingRegistrationId, setUpdatingRegistrationId] = useState<string | null>(null);
@@ -152,7 +151,7 @@ export default function RegistrationManagerClient() {
         athleteLastName: selectedPlayer.lastName,
         birthDate: selectedPlayer.birthDate,
         position: selectedPlayer.position,
-        parentName: parentName.trim() || "Staff registration",
+        parentName: "Staff registration",
         paymentProvider: "",
         paymentOrderId: "",
         paymentCaptureId: "",
@@ -162,7 +161,6 @@ export default function RegistrationManagerClient() {
 
       setStatus("Player registered.");
       setSelectedPlayerId("");
-      setParentName("");
       setPlayerSearchTerm("");
     } catch (submitError) {
       setError(getFriendlyFirebaseError(submitError, "Unable to save registration."));
@@ -351,16 +349,6 @@ export default function RegistrationManagerClient() {
 
         <SectionCard title="Add Registration" kicker="Choose Player">
           <form className="space-y-5" onSubmit={handleSubmit}>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Parent name
-              <input
-                value={parentName}
-                onChange={(event) => setParentName(event.target.value)}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Leave blank to use staff registration"
-              />
-            </label>
-
             <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
               Search players
               <input

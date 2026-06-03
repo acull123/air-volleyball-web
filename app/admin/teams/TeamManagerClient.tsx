@@ -491,7 +491,7 @@ export default function TeamManagerClient() {
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
 
-      <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+      <div className="grid items-start gap-8 lg:grid-cols-[0.95fr_1.05fr]">
         <SectionCard title={selectedTeamId ? "Edit Team" : "Add Team"} kicker="Team Details">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
             <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
@@ -714,7 +714,7 @@ export default function TeamManagerClient() {
               />
             </label>
           </div>
-          <div className="max-h-[42rem] space-y-3 overflow-y-auto pr-2">
+          <div className="max-h-[76rem] space-y-3 overflow-y-auto pr-2">
             {teams.loading && (
               <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
                 Loading teams...
@@ -737,61 +737,12 @@ export default function TeamManagerClient() {
 
               return (
                 <div key={team.id} className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div className="space-y-4">
                     <div className="space-y-1">
                       <p className="text-lg font-bold text-[color:var(--ink)]">{team.name}</p>
                       <p className="text-sm text-[color:var(--muted)]">
                         Players: {teamPlayers.length ? teamPlayers.map((player) => `${player.firstName} ${player.lastName}`).join(", ") : "No players assigned"}
                       </p>
-                      {teamPlayers.length > 0 && (
-                        <div className="mt-3 space-y-2">
-                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                            Team payments
-                          </p>
-                          {invoices.loading ? (
-                            <p className="text-sm text-[color:var(--muted)]">Loading payment statuses...</p>
-                          ) : invoices.error ? (
-                            <p className="text-sm text-[color:var(--muted)]">Payment statuses are unavailable right now.</p>
-                          ) : (
-                            <div className="grid gap-2">
-                              {teamPlayers.map((player) => {
-                                const payment = getTeamPayment(team.id, player.id);
-                                const paymentStatus = payment?.status === "paid" ? "paid" : "unpaid";
-                                const nextStatus = paymentStatus === "paid" ? "unpaid" : "paid";
-                                const paymentKey = `${team.id}:${player.id}`;
-
-                                return (
-                                  <div
-                                    key={player.id}
-                                    className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[color:var(--paper)] px-3 py-2 text-sm"
-                                  >
-                                    <span className="font-medium text-[color:var(--ink)]">
-                                      {player.firstName} {player.lastName}
-                                    </span>
-                                    <div className="flex items-center gap-2">
-                                      <span className="rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                                        {paymentStatus}
-                                      </span>
-                                      <button
-                                        type="button"
-                                        disabled={updatingPaymentKey === paymentKey}
-                                        onClick={() => void updateTeamPlayerPayment(team, player, nextStatus)}
-                                        className="rounded-full border border-[color:var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
-                                      >
-                                        {updatingPaymentKey === paymentKey
-                                          ? "Saving..."
-                                          : paymentStatus === "paid"
-                                            ? "Mark unpaid"
-                                            : "Mark paid"}
-                                      </button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
                       <p className="text-sm text-[color:var(--muted)]">
                         Coaches: {teamCoaches.length ? teamCoaches.map((coach) => `${coach.firstName} ${coach.lastName}`).join(", ") : "No coaches assigned"}
                       </p>
@@ -829,6 +780,55 @@ export default function TeamManagerClient() {
                         Delete
                       </button>
                     </div>
+                    {teamPlayers.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                          Team payments
+                        </p>
+                        {invoices.loading ? (
+                          <p className="text-sm text-[color:var(--muted)]">Loading payment statuses...</p>
+                        ) : invoices.error ? (
+                          <p className="text-sm text-[color:var(--muted)]">Payment statuses are unavailable right now.</p>
+                        ) : (
+                          <div className="grid gap-2">
+                            {teamPlayers.map((player) => {
+                              const payment = getTeamPayment(team.id, player.id);
+                              const paymentStatus = payment?.status === "paid" ? "paid" : "unpaid";
+                              const nextStatus = paymentStatus === "paid" ? "unpaid" : "paid";
+                              const paymentKey = `${team.id}:${player.id}`;
+
+                              return (
+                                <div
+                                  key={player.id}
+                                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[color:var(--paper)] px-3 py-2 text-sm"
+                                >
+                                  <span className="font-medium text-[color:var(--ink)]">
+                                    {player.firstName} {player.lastName}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                                      {paymentStatus}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      disabled={updatingPaymentKey === paymentKey}
+                                      onClick={() => void updateTeamPlayerPayment(team, player, nextStatus)}
+                                      className="rounded-full border border-[color:var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {updatingPaymentKey === paymentKey
+                                        ? "Saving..."
+                                        : paymentStatus === "paid"
+                                          ? "Mark unpaid"
+                                          : "Mark paid"}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );

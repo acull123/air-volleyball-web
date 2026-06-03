@@ -19,6 +19,7 @@ export const siteNav: NavLink[] = [
   { href: "/teams", label: "Teams" },
   { href: "/training", label: "Training" },
   { href: "/register", label: "Register" },
+  { href: "/forms", label: "Forms" },
   { href: "/login", label: "Player Portal" },
   { href: "/admin", label: "Admin" },
 ];

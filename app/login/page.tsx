@@ -761,8 +761,9 @@ export default function LoginPage() {
           actions={[{ href: "/profile", label: "Edit Profile" }]}
         />
 
-        <div className="space-y-8">
-          <SectionCard title="Linked Players" kicker="Your Account">
+        <div className="flex flex-col gap-8">
+          <div className="order-2">
+            <SectionCard title="Linked Players" kicker="Your Account">
             {linkedPlayers.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
                 No players are linked to this account yet.
@@ -857,9 +858,11 @@ export default function LoginPage() {
                 </div>
               )}
             </div>
-          </SectionCard>
+            </SectionCard>
+          </div>
 
-          <SectionCard title="Portal Overview" kicker="Season Tools">
+          <div className="order-1">
+            <SectionCard title="Portal Overview" kicker="Season Tools">
             <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
               <div className="space-y-4">
                 <div className={portalStaticCardClass}>
@@ -945,7 +948,8 @@ export default function LoginPage() {
                 />
               </div>
             </div>
-          </SectionCard>
+            </SectionCard>
+          </div>
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
