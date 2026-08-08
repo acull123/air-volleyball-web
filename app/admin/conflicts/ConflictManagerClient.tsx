@@ -3,7 +3,12 @@
 import { useMemo, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
+import MatchedAdminColumns from "@/app/admin/components/MatchedAdminColumns";
+import {
+  firestoreApi,
+  useFirestoreCollection,
+  getFriendlyFirebaseError,
+} from "@/lib/firebase";
 import { comparePlayersByName } from "@/lib/player-name";
 import type { ConflictDocument } from "@/lib/firebase/schema";
 import { isCurrentPlayer } from "@/lib/player-status";
@@ -34,7 +39,9 @@ function buildEmptyDraft() {
   return {
     playerId: "",
     startAt: toDateTimeInputValue(defaultStart),
-    endAt: toDateTimeInputValue(new Date(defaultStart.getTime() + 60 * 60 * 1000)),
+    endAt: toDateTimeInputValue(
+      new Date(defaultStart.getTime() + 60 * 60 * 1000),
+    ),
     reason: "",
     status: "submitted" as const,
   };
@@ -78,7 +85,9 @@ export default function ConflictManagerClient() {
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
   const users = useFirestoreCollection("users");
-  const [selectedConflictId, setSelectedConflictId] = useState<string | null>(null);
+  const [selectedConflictId, setSelectedConflictId] = useState<string | null>(
+    null,
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [draft, setDraft] = useState<ConflictDraft>(buildEmptyDraft);
   const [saving, setSaving] = useState(false);
@@ -92,15 +101,20 @@ export default function ConflictManagerClient() {
 
   const filteredConflicts = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
-    const sorted = [...conflicts.data].sort((a, b) => `${a.startAt}`.localeCompare(`${b.startAt}`));
+    const sorted = [...conflicts.data].sort((a, b) =>
+      `${a.startAt}`.localeCompare(`${b.startAt}`),
+    );
 
     if (!normalizedSearch) {
       return sorted;
     }
 
     return sorted.filter((conflict) => {
-      const player = players.data.find((entry) => entry.id === conflict.playerId);
-      const teamName = teams.data.find((team) => team.id === player?.teamId)?.name ?? "";
+      const player = players.data.find(
+        (entry) => entry.id === conflict.playerId,
+      );
+      const teamName =
+        teams.data.find((team) => team.id === player?.teamId)?.name ?? "";
 
       return [
         conflict.playerName,
@@ -135,7 +149,8 @@ export default function ConflictManagerClient() {
     setError(null);
 
     try {
-      const player = selectablePlayers.find((entry) => entry.id === draft.playerId) ?? null;
+      const player =
+        selectablePlayers.find((entry) => entry.id === draft.playerId) ?? null;
 
       if (!player) {
         throw new Error("Choose a player.");
@@ -156,10 +171,13 @@ export default function ConflictManagerClient() {
         throw new Error("End date/time must be after the start date/time.");
       }
 
-      const linkedUser = users.data.find((user) => user.playerIds.includes(player.id)) ?? null;
+      const linkedUser =
+        users.data.find((user) => user.playerIds.includes(player.id)) ?? null;
 
       if (!linkedUser?.id) {
-        throw new Error("That player must be linked to a portal account before a conflict can be assigned.");
+        throw new Error(
+          "That player must be linked to a portal account before a conflict can be assigned.",
+        );
       }
 
       const payload = {
@@ -182,7 +200,9 @@ export default function ConflictManagerClient() {
 
       resetForm();
     } catch (submitError) {
-      setError(getFriendlyFirebaseError(submitError, "Unable to save conflict."));
+      setError(
+        getFriendlyFirebaseError(submitError, "Unable to save conflict."),
+      );
     } finally {
       setSaving(false);
     }
@@ -205,7 +225,9 @@ export default function ConflictManagerClient() {
       }
       setStatus("Conflict deleted.");
     } catch (deleteError) {
-      setError(getFriendlyFirebaseError(deleteError, "Unable to delete conflict."));
+      setError(
+        getFriendlyFirebaseError(deleteError, "Unable to delete conflict."),
+      );
     }
   }
 
@@ -218,177 +240,225 @@ export default function ConflictManagerClient() {
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
 
-      <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard title={selectedConflictId ? "Edit Conflict" : "Add Conflict"} kicker="Scheduling">
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Player <span className="text-[#b42318]">*</span>
-              </span>
-              <select
-                value={draft.playerId}
-                onChange={(event) => setDraft((current) => ({ ...current, playerId: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="">Select player</option>
-                {selectablePlayers.map((player) => {
-                  const teamName = teams.data.find((team) => team.id === player.teamId)?.name ?? "";
-                  return (
-                    <option key={player.id} value={player.id}>
-                      {player.firstName} {player.lastName}
-                      {teamName ? ` · ${teamName}` : ""}
-                    </option>
-                  );
-                })}
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Start date/time <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                type="datetime-local"
-                value={draft.startAt}
-                onChange={(event) => setDraft((current) => ({ ...current, startAt: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                End date/time <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                type="datetime-local"
-                value={draft.endAt}
-                onChange={(event) => setDraft((current) => ({ ...current, endAt: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Status
-              <select
-                value={draft.status}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    status: event.target.value as ConflictDocument["status"],
-                  }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="submitted">Submitted</option>
-                <option value="reviewed">Reviewed</option>
-                <option value="resolved">Resolved</option>
-              </select>
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Reason
-              <textarea
-                value={draft.reason}
-                onChange={(event) => setDraft((current) => ({ ...current, reason: event.target.value }))}
-                className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Add any context that staff should know."
-              />
-            </label>
-            <div className="md:col-span-2 flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? "Saving..." : selectedConflictId ? "Save Changes" : "Add Conflict"}
-              </button>
-              {selectedConflictId && (
+      <MatchedAdminColumns
+        left={
+          <SectionCard
+            title={selectedConflictId ? "Edit Conflict" : "Add Conflict"}
+            kicker="Scheduling"
+          >
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Player <span className="text-[#b42318]">*</span>
+                </span>
+                <select
+                  value={draft.playerId}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      playerId: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                >
+                  <option value="">Select player</option>
+                  {selectablePlayers.map((player) => {
+                    const teamName =
+                      teams.data.find((team) => team.id === player.teamId)
+                        ?.name ?? "";
+                    return (
+                      <option key={player.id} value={player.id}>
+                        {player.firstName} {player.lastName}
+                        {teamName ? ` · ${teamName}` : ""}
+                      </option>
+                    );
+                  })}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Start date/time <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  type="datetime-local"
+                  value={draft.startAt}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      startAt: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  End date/time <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  type="datetime-local"
+                  value={draft.endAt}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      endAt: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Status
+                <select
+                  value={draft.status}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      status: event.target.value as ConflictDocument["status"],
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                >
+                  <option value="submitted">Submitted</option>
+                  <option value="reviewed">Reviewed</option>
+                  <option value="resolved">Resolved</option>
+                </select>
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Reason
+                <textarea
+                  value={draft.reason}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      reason: event.target.value,
+                    }))
+                  }
+                  className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Add any context that staff should know."
+                />
+              </label>
+              <div className="md:col-span-2 flex flex-wrap items-center gap-3">
                 <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Cancel Edit
+                  {saving
+                    ? "Saving..."
+                    : selectedConflictId
+                      ? "Save Changes"
+                      : "Add Conflict"}
                 </button>
+                {selectedConflictId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                {status && (
+                  <span className="text-sm text-[color:var(--muted)]">
+                    {status}
+                  </span>
+                )}
+              </div>
+              {error && (
+                <div className="md:col-span-2 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
+                  {error}
+                </div>
               )}
-              {status && <span className="text-sm text-[color:var(--muted)]">{status}</span>}
+            </form>
+          </SectionCard>
+        }
+        right={
+          <SectionCard title="Current Conflicts" kicker="Conflict Records">
+            <div className="mb-4">
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Search conflicts
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Search by player, team, reason, or status"
+                />
+              </label>
             </div>
-            {error && (
-              <div className="md:col-span-2 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
-                {error}
-              </div>
-            )}
-          </form>
-        </SectionCard>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+              {(conflicts.loading ||
+                players.loading ||
+                teams.loading ||
+                users.loading) && (
+                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  Loading conflicts...
+                </div>
+              )}
+              {!conflicts.loading && filteredConflicts.length === 0 && (
+                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  No conflicts match the current search.
+                </div>
+              )}
+              {filteredConflicts.map((conflict) => {
+                const player = players.data.find(
+                  (entry) => entry.id === conflict.playerId,
+                );
+                const teamName =
+                  teams.data.find((team) => team.id === player?.teamId)?.name ??
+                  "No team assigned";
 
-        <SectionCard title="Current Conflicts" kicker="Conflict Records">
-          <div className="mb-4">
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Search conflicts
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Search by player, team, reason, or status"
-              />
-            </label>
-          </div>
-          <div className="max-h-[42rem] space-y-3 overflow-y-auto pr-2">
-            {(conflicts.loading || players.loading || teams.loading || users.loading) && (
-              <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                Loading conflicts...
-              </div>
-            )}
-            {!conflicts.loading && filteredConflicts.length === 0 && (
-              <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                No conflicts match the current search.
-              </div>
-            )}
-            {filteredConflicts.map((conflict) => {
-              const player = players.data.find((entry) => entry.id === conflict.playerId);
-              const teamName = teams.data.find((team) => team.id === player?.teamId)?.name ?? "No team assigned";
-
-              return (
-                <div
-                  key={conflict.id}
-                  className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-lg font-bold text-[color:var(--ink)]">{conflict.playerName}</p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Team: {teamName}
-                        {player?.position ? ` · ${player.position}` : ""}
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        {formatConflictDateTime(conflict.startAt)} to {formatConflictDateTime(conflict.endAt)}
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Status: {conflict.status}
-                      </p>
-                      {conflict.reason && (
-                        <p className="text-sm text-[color:var(--muted)]">{conflict.reason}</p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => beginEdit(conflict)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(conflict.id)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        Delete
-                      </button>
+                return (
+                  <div
+                    key={conflict.id}
+                    className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-lg font-bold text-[color:var(--ink)]">
+                          {conflict.playerName}
+                        </p>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          Team: {teamName}
+                          {player?.position ? ` · ${player.position}` : ""}
+                        </p>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          {formatConflictDateTime(conflict.startAt)} to{" "}
+                          {formatConflictDateTime(conflict.endAt)}
+                        </p>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          Status: {conflict.status}
+                        </p>
+                        {conflict.reason && (
+                          <p className="text-sm text-[color:var(--muted)]">
+                            {conflict.reason}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => beginEdit(conflict)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(conflict.id)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
-      </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        }
+      />
     </>
   );
 }

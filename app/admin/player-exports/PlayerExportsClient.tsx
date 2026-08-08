@@ -5,6 +5,7 @@ import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { useFirestoreCollection } from "@/lib/firebase";
 import { comparePlayersByName } from "@/lib/player-name";
+import { formatTournamentEventLabel, isTournamentEventType } from "@/lib/tournament-events";
 import type { EventDocument, FirestoreDate, PlayerDocument, RegistrationDocument } from "@/lib/firebase/schema";
 
 type ExportRecord = {
@@ -62,6 +63,10 @@ const exportColumns = [
 ] as const;
 
 function formatEventType(type: EventDocument["type"]) {
+  if (isTournamentEventType(type)) {
+    return "Tournament";
+  }
+
   if (type === "tryout") {
     return "Tryout";
   }
@@ -71,6 +76,10 @@ function formatEventType(type: EventDocument["type"]) {
   }
 
   return type;
+}
+
+function formatExportEventType(event: EventDocument) {
+  return isTournamentEventType(event.type) ? formatTournamentEventLabel(event) : formatEventType(event.type);
 }
 
 function formatDate(value: string) {
@@ -167,7 +176,7 @@ function buildExportRow(record: ExportRecord) {
 
   return [
     event.title,
-    formatEventType(event.type),
+    formatExportEventType(event),
     formatEventDate(event),
     event.location,
     registration.paymentStatus,
@@ -379,7 +388,7 @@ export default function PlayerExportsClient() {
                         {event.title}
                       </span>
                       <span className="mt-1 block text-sm leading-6 text-[color:var(--muted)]">
-                        {formatEventType(event.type)} · {formatEventDate(event)} · {registrationCount}{" "}
+                        {formatExportEventType(event)} · {formatEventDate(event)} · {registrationCount}{" "}
                         registered
                       </span>
                     </span>
@@ -432,7 +441,7 @@ export default function PlayerExportsClient() {
                     {selectedEventSummaries.map(({ event, count }) => (
                       <tr key={event.id} className="border-b border-[color:var(--line)]">
                         <td className="px-4 py-3 font-semibold text-[color:var(--ink)]">{event.title}</td>
-                        <td className="px-4 py-3 text-[color:var(--muted)]">{formatEventType(event.type)}</td>
+                        <td className="px-4 py-3 text-[color:var(--muted)]">{formatExportEventType(event)}</td>
                         <td className="px-4 py-3 text-[color:var(--muted)]">{formatEventDate(event)}</td>
                         <td className="px-4 py-3 text-[color:var(--muted)]">{count}</td>
                       </tr>

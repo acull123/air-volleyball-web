@@ -3,14 +3,22 @@
 import { Suspense, useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { where } from "firebase/firestore";
 import PageHero from "../components/PageHero";
 import SectionCard from "../components/SectionCard";
 import { formatEventStatus, getEventStatus, shouldShowEventStatus } from "@/lib/event-status";
 import { getEventTeamLabel } from "@/lib/event-teams";
-import { firestoreApi, getFriendlyFirebaseError, useFirestoreCollection } from "@/lib/firebase";
+import {
+  firestoreApi,
+  getFriendlyFirebaseError,
+  getRegistrationDocumentId,
+  useFirestoreCollection,
+  useFirestoreDocument,
+} from "@/lib/firebase";
 import { useAuthSession } from "@/lib/firebase/auth";
 import { comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
+import { validateTryoutRegistrationEligibility } from "@/lib/tryout-eligibility";
 import type { EventDocument } from "@/lib/firebase/schema";
 
 type RegistrationMode = "existing" | "new";
@@ -93,10 +101,68 @@ const emptyNewPlayerDraft: NewPlayerDraft = {
   allergies: "",
 };
 
+const requiredNewPlayerFields: { key: keyof NewPlayerDraft; label: string }[] = [
+  { key: "firstName", label: "First name" },
+  { key: "lastName", label: "Last name" },
+  { key: "birthDate", label: "Birthdate" },
+  { key: "height", label: "Height" },
+  { key: "position", label: "Primary position" },
+  { key: "secondaryPosition", label: "Secondary position" },
+  { key: "school", label: "School" },
+  { key: "grade", label: "Grade" },
+  { key: "shirtSize", label: "Shirt size" },
+  { key: "email", label: "Player email" },
+  { key: "phone", label: "Player phone number" },
+  { key: "guardianFirstName", label: "Guardian first name" },
+  { key: "guardianLastName", label: "Guardian last name" },
+  { key: "guardianEmail", label: "Guardian email" },
+  { key: "guardianPhone", label: "Guardian phone number" },
+  { key: "guardian2FirstName", label: "Guardian 2 first name" },
+  { key: "guardian2LastName", label: "Guardian 2 last name" },
+  { key: "guardian2Phone", label: "Guardian 2 phone" },
+  { key: "guardian2Email", label: "Guardian 2 email" },
+  { key: "addressStreet", label: "Street address" },
+  { key: "addressCity", label: "City" },
+  { key: "addressState", label: "State" },
+  { key: "addressZip", label: "ZIP" },
+  { key: "emergencyContactName", label: "Emergency contact name" },
+  { key: "emergencyContactRelationship", label: "Relationship to participant" },
+  { key: "emergencyContactPhone", label: "Emergency contact primary phone" },
+  { key: "concussionDiagnosedPast24Months", label: "Concussion diagnosed in past 24 months" },
+  { key: "medicalConditions", label: "Medical conditions" },
+  { key: "medications", label: "Medications" },
+  { key: "allergies", label: "Allergies" },
+];
+
+function getMissingNewPlayerFields(draft: NewPlayerDraft) {
+  const missingFields = requiredNewPlayerFields
+    .filter((field) => !draftTrim(String(draft[field.key] ?? "")))
+    .map((field) => field.label);
+
+  if (draft.guardianAddressDifferent) {
+    [
+      { key: "guardianAddressStreet", label: "Guardian street address" },
+      { key: "guardianAddressCity", label: "Guardian city" },
+      { key: "guardianAddressState", label: "Guardian state" },
+      { key: "guardianAddressZip", label: "Guardian ZIP" },
+    ].forEach((field) => {
+      if (!draftTrim(String(draft[field.key as keyof NewPlayerDraft] ?? ""))) {
+        missingFields.push(field.label);
+      }
+    });
+  }
+
+  if (draft.concussionDiagnosedPast24Months === "yes" && !draftTrim(draft.concussionDiagnosisDate)) {
+    missingFields.push("Concussion diagnosis date");
+  }
+
+  return missingFields;
+}
+
 const nextSteps = [
   "Choose the camp or tryout you want to attend.",
   "Sign in, then select a linked player or add a new athlete profile.",
-  "If an event has a fee, staff will mark the registration paid after offline payment.",
+  "Tryout players can sign up for multiple age-group tryouts. Submit each tryout separately, and the site will check birthdate eligibility.",
 ];
 
 const registerInteractiveCardClass =
@@ -161,6 +227,12 @@ function formatMoney(amount: number) {
   }).format(amount || 0);
 }
 
+function formatAgeGroups(event: EventDocument) {
+  const ageGroups = event.ageGroups?.length ? event.ageGroups : event.ageGroup ? [event.ageGroup] : [];
+
+  return ageGroups.length > 0 ? ageGroups.join(", ") : "All ages";
+}
+
 function formatBirthDate(value: string) {
   if (!value) {
     return "Birthdate needed";
@@ -198,6 +270,8 @@ function RegisterPageContent() {
   const events = useFirestoreCollection("events");
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
+  const signedInUserId = access.authUser?.firebaseUser.uid ?? "";
+  const currentUser = useFirestoreDocument("users", signedInUserId, { enabled: Boolean(signedInUserId) });
   const [selectedEventId, setSelectedEventId] = useState(initialEventId);
   const [registrationMode, setRegistrationMode] = useState<RegistrationMode>("existing");
   const [existingPlayerId, setExistingPlayerId] = useState("");
@@ -228,9 +302,10 @@ function RegisterPageContent() {
 
   const selectedEvent =
     registerableEvents.find((event) => event.id === effectiveSelectedEventId) ?? null;
+  const selectedEventFullDetails = selectedEvent?.fullDetails?.trim() ?? "";
   const profileLinkedPlayerIds = useMemo(
-    () => access.authUser?.profile?.playerIds ?? [],
-    [access.authUser?.profile?.playerIds],
+    () => currentUser.data?.playerIds ?? access.authUser?.profile?.playerIds ?? [],
+    [access.authUser?.profile?.playerIds, currentUser.data?.playerIds],
   );
   const linkedPlayerIds = useMemo(
     () => linkedPlayerIdsOverride ?? profileLinkedPlayerIds,
@@ -288,18 +363,14 @@ function RegisterPageContent() {
     );
   }, [newPlayer.birthDate, newPlayer.firstName, newPlayer.lastName, players.data, registrationMode]);
 
+  const missingNewPlayerFields = useMemo(() => getMissingNewPlayerFields(newPlayer), [newPlayer]);
+
   const canSubmit =
     Boolean(selectedEvent) &&
     isRegistrationAvailable &&
     (registrationMode === "existing"
       ? Boolean(selectedExistingPlayer)
-      : Boolean(
-          draftTrim(newPlayer.firstName) &&
-            draftTrim(newPlayer.lastName) &&
-            newPlayer.birthDate &&
-            draftTrim(newPlayer.guardianFirstName) &&
-            draftTrim(newPlayer.guardianLastName),
-        ));
+      : missingNewPlayerFields.length === 0);
 
   const submitLabel = selectedEvent ? "Register" : "Choose An Event";
 
@@ -464,8 +535,16 @@ function RegisterPageContent() {
 
     const registeredPlayerId =
       registrationMode === "new" ? await ensureNewRegistrationPlayerId() : registrationPayload.playerId;
+    const existingRegistrationsForPlayer = await firestoreApi.registrations.list([
+      where("playerId", "==", registeredPlayerId),
+    ]);
+
+    if (existingRegistrationsForPlayer.some((registration) => registration.eventId === selectedEvent.id)) {
+      throw new Error("This player is already registered for this event.");
+    }
 
     await firestoreApi.registrations.create({
+      id: getRegistrationDocumentId(selectedEvent.id, registeredPlayerId),
       eventId: selectedEvent.id,
       eventTitle: selectedEvent.title,
       eventType: selectedEvent.type,
@@ -546,11 +625,15 @@ function RegisterPageContent() {
       return;
     }
 
-    if (
-      registrationMode === "new" &&
-      (!draftTrim(newPlayer.guardianFirstName) || !draftTrim(newPlayer.guardianLastName))
-    ) {
-      setError("Guardian first and last name are required for new players.");
+    if (registrationMode === "new" && missingNewPlayerFields.length > 0) {
+      setError(`Complete required fields: ${missingNewPlayerFields.join(", ")}.`);
+      return;
+    }
+
+    const tryoutEligibility = validateTryoutRegistrationEligibility(selectedEvent, athlete.birthDate);
+
+    if (!tryoutEligibility.eligible) {
+      setError(tryoutEligibility.message);
       return;
     }
 
@@ -590,6 +673,33 @@ function RegisterPageContent() {
           { href: "/teams", label: "Explore Teams", variant: "secondary" },
         ]}
       />
+
+      <SectionCard title="How Registration Works" kicker="Simple Flow">
+        <div className="grid gap-4 md:grid-cols-3">
+          {nextSteps.map((step) => (
+            <div
+              key={step}
+              className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5 text-sm leading-7 text-[color:var(--muted)]"
+            >
+              {step}
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link
+            href="/training"
+            className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+          >
+            View Training
+          </Link>
+          <Link
+            href="/teams"
+            className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+          >
+            Explore Teams
+          </Link>
+        </div>
+      </SectionCard>
 
       <div className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
         <SectionCard title="Open Registration Events" kicker="Choose An Event">
@@ -640,7 +750,7 @@ function RegisterPageContent() {
                       <p>{formatEventTime(event.startTime)}</p>
                       <p>{event.location}</p>
                       <p>Audience: {teamName}</p>
-                      <p>Age group: {event.ageGroup || "All ages"}</p>
+                      <p>Age group: {formatAgeGroups(event)}</p>
                       {shouldShowEventStatus(eventStatus) && <p>Status: {formatEventStatus(eventStatus)}</p>}
                     </div>
                   </button>
@@ -687,6 +797,16 @@ function RegisterPageContent() {
                     This event has a fee. Staff will mark the registration paid after offline payment.
                   </p>
                 )}
+                {selectedEventFullDetails && (
+                  <div className="mt-5 rounded-3xl border border-[color:var(--line)] bg-white p-5">
+                    <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                      Full Details
+                    </p>
+                    <p className="mt-3 whitespace-pre-line text-sm leading-7 text-[color:var(--muted)]">
+                      {selectedEventFullDetails}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
@@ -702,7 +822,7 @@ function RegisterPageContent() {
                     Existing Player
                   </p>
                   <p className={`mt-2 text-sm leading-7 ${registrationMode === "existing" ? "text-[#d7e5f2]" : "text-[color:var(--muted)] group-hover:text-[#d7e5f2]"}`}>
-                    Choose a player already linked in your player portal.
+                    Choose a player already linked in your portal.
                   </p>
                 </button>
                 <button
@@ -819,7 +939,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Height
+                      <span>
+                        Height <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.height)}
                         onChange={(event) =>
@@ -830,7 +952,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Primary position
+                      <span>
+                        Primary position <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.position)}
                         onChange={(event) =>
@@ -841,18 +965,21 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Secondary position
+                      <span>
+                        Secondary position <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.secondaryPosition)}
                         onChange={(event) =>
                           setNewPlayer((current) => ({ ...current, secondaryPosition: event.target.value }))
                         }
                         className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                        placeholder="Optional"
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      School
+                      <span>
+                        School <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.school)}
                         onChange={(event) =>
@@ -862,7 +989,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Grade
+                      <span>
+                        Grade <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.grade)}
                         onChange={(event) =>
@@ -872,7 +1001,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Shirt size
+                      <span>
+                        Shirt size <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.shirtSize)}
                         onChange={(event) =>
@@ -882,7 +1013,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Player email
+                      <span>
+                        Player email <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         type="email"
                         value={draftText(newPlayer.email)}
@@ -893,7 +1026,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Player phone number
+                      <span>
+                        Player phone number <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.phone)}
                         onChange={(event) =>
@@ -930,7 +1065,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Guardian email
+                      <span>
+                        Guardian email <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         type="email"
                         value={draftText(newPlayer.guardianEmail)}
@@ -941,7 +1078,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Guardian phone number
+                      <span>
+                        Guardian phone number <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.guardianPhone)}
                         onChange={(event) =>
@@ -966,7 +1105,9 @@ function RegisterPageContent() {
                     {newPlayer.guardianAddressDifferent && (
                       <>
                         <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                          Guardian street address
+                          <span>
+                            Guardian street address <span className="text-[#b42318]">*</span>
+                          </span>
                           <input
                             value={draftText(newPlayer.guardianAddressStreet)}
                             onChange={(event) =>
@@ -979,7 +1120,9 @@ function RegisterPageContent() {
                           />
                         </label>
                         <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                          Guardian city
+                          <span>
+                            Guardian city <span className="text-[#b42318]">*</span>
+                          </span>
                           <input
                             value={draftText(newPlayer.guardianAddressCity)}
                             onChange={(event) =>
@@ -992,7 +1135,9 @@ function RegisterPageContent() {
                           />
                         </label>
                         <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                          Guardian state
+                          <span>
+                            Guardian state <span className="text-[#b42318]">*</span>
+                          </span>
                           <input
                             value={draftText(newPlayer.guardianAddressState)}
                             onChange={(event) =>
@@ -1005,7 +1150,9 @@ function RegisterPageContent() {
                           />
                         </label>
                         <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                          Guardian ZIP
+                          <span>
+                            Guardian ZIP <span className="text-[#b42318]">*</span>
+                          </span>
                           <input
                             value={draftText(newPlayer.guardianAddressZip)}
                             onChange={(event) =>
@@ -1023,7 +1170,9 @@ function RegisterPageContent() {
                       Guardian 2
                     </p>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Guardian 2 first name
+                      <span>
+                        Guardian 2 first name <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.guardian2FirstName)}
                         onChange={(event) =>
@@ -1033,7 +1182,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Guardian 2 last name
+                      <span>
+                        Guardian 2 last name <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.guardian2LastName)}
                         onChange={(event) =>
@@ -1043,7 +1194,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Guardian 2 phone
+                      <span>
+                        Guardian 2 phone <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.guardian2Phone)}
                         onChange={(event) =>
@@ -1053,7 +1206,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Guardian 2 email
+                      <span>
+                        Guardian 2 email <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         type="email"
                         value={draftText(newPlayer.guardian2Email)}
@@ -1067,7 +1222,9 @@ function RegisterPageContent() {
                       Player address
                     </p>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Street address
+                      <span>
+                        Street address <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.addressStreet)}
                         onChange={(event) =>
@@ -1077,7 +1234,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      City
+                      <span>
+                        City <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.addressCity)}
                         onChange={(event) =>
@@ -1087,7 +1246,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      State
+                      <span>
+                        State <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.addressState)}
                         onChange={(event) =>
@@ -1097,7 +1258,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      ZIP
+                      <span>
+                        ZIP <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.addressZip)}
                         onChange={(event) =>
@@ -1110,7 +1273,9 @@ function RegisterPageContent() {
                       Emergency Contact / Medical Information
                     </p>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Emergency contact name
+                      <span>
+                        Emergency contact name <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.emergencyContactName)}
                         onChange={(event) =>
@@ -1120,7 +1285,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Relationship to participant
+                      <span>
+                        Relationship to participant <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.emergencyContactRelationship)}
                         onChange={(event) =>
@@ -1133,7 +1300,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Emergency contact primary phone
+                      <span>
+                        Emergency contact primary phone <span className="text-[#b42318]">*</span>
+                      </span>
                       <input
                         value={draftText(newPlayer.emergencyContactPhone)}
                         onChange={(event) =>
@@ -1143,7 +1312,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Concussion diagnosed in past 24 months?
+                      <span>
+                        Concussion diagnosed in past 24 months? <span className="text-[#b42318]">*</span>
+                      </span>
                       <select
                         value={draftText(newPlayer.concussionDiagnosedPast24Months)}
                         onChange={(event) =>
@@ -1161,7 +1332,9 @@ function RegisterPageContent() {
                     </label>
                     {newPlayer.concussionDiagnosedPast24Months === "yes" && (
                       <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                        Concussion diagnosis date (month/year)
+                        <span>
+                          Concussion diagnosis date (month/year) <span className="text-[#b42318]">*</span>
+                        </span>
                         <input
                           value={draftText(newPlayer.concussionDiagnosisDate)}
                           onChange={(event) =>
@@ -1176,7 +1349,9 @@ function RegisterPageContent() {
                       </label>
                     )}
                     <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Medical conditions we should be aware of
+                      <span>
+                        Medical conditions we should be aware of <span className="text-[#b42318]">*</span>
+                      </span>
                       <textarea
                         value={draftText(newPlayer.medicalConditions)}
                         onChange={(event) =>
@@ -1186,7 +1361,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Medications
+                      <span>
+                        Medications <span className="text-[#b42318]">*</span>
+                      </span>
                       <textarea
                         value={draftText(newPlayer.medications)}
                         onChange={(event) =>
@@ -1196,7 +1373,9 @@ function RegisterPageContent() {
                       />
                     </label>
                     <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                      Allergies
+                      <span>
+                        Allergies <span className="text-[#b42318]">*</span>
+                      </span>
                       <textarea
                         value={draftText(newPlayer.allergies)}
                         onChange={(event) =>
@@ -1250,32 +1429,6 @@ function RegisterPageContent() {
         </SectionCard>
       </div>
 
-      <SectionCard title="How Registration Works" kicker="Simple Flow">
-        <div className="grid gap-4 md:grid-cols-3">
-          {nextSteps.map((step) => (
-            <div
-              key={step}
-              className="rounded-[1.5rem] bg-[color:var(--paper)] px-5 py-5 text-sm leading-7 text-[color:var(--muted)]"
-            >
-              {step}
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 flex flex-wrap gap-3">
-          <Link
-            href="/training"
-            className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-          >
-            View Training
-          </Link>
-          <Link
-            href="/teams"
-            className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-          >
-            Explore Teams
-          </Link>
-        </div>
-      </SectionCard>
     </>
   );
 }

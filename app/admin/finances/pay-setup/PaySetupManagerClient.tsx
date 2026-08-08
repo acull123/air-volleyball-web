@@ -3,27 +3,44 @@
 import { useMemo, useState, type FormEvent } from "react";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
+import MatchedAdminColumns from "@/app/admin/components/MatchedAdminColumns";
+import {
+  firestoreApi,
+  useFirestoreCollection,
+  getFriendlyFirebaseError,
+} from "@/lib/firebase";
 import { useAuthSession } from "@/lib/firebase/auth";
-import type { ClubEventType, CoachDocument, PayTypeDocument } from "@/lib/firebase/schema";
+import type {
+  ClubEventType,
+  CoachDocument,
+  PayTypeDocument,
+} from "@/lib/firebase/schema";
+import {
+  formatTournamentDayCount,
+  getPayTypeTournamentDayCount,
+  isTournamentEventType,
+} from "@/lib/tournament-events";
 
 type PayTypeDraft = {
   eventType: ClubEventType;
+  tournamentDayCount: string;
   description: string;
   value: string;
   defaulted: boolean;
+  mealStipendAmount: string;
 };
 
 const emptyPayTypeDraft: PayTypeDraft = {
   eventType: "tournament",
+  tournamentDayCount: "1",
   description: "",
   value: "",
   defaulted: false,
+  mealStipendAmount: "",
 };
 
 const eventTypeOptions: { value: ClubEventType; label: string }[] = [
   { value: "tournament", label: "Tournament" },
-  { value: "twoDayTournament", label: "2 Day Tournament" },
   { value: "practice", label: "Practice" },
   { value: "camp", label: "Camp" },
   { value: "tryout", label: "Tryout" },
@@ -39,19 +56,32 @@ function formatMoney(amount: number) {
 }
 
 function formatEventType(type: ClubEventType) {
-  return eventTypeOptions.find((option) => option.value === type)?.label ?? type;
+  if (type === "twoDayTournament") {
+    return "Tournament";
+  }
+
+  return (
+    eventTypeOptions.find((option) => option.value === type)?.label ?? type
+  );
 }
 
 function getCoachPayTypeIds(coach: CoachDocument) {
   return Array.isArray(coach.payTypeIds) ? coach.payTypeIds : [];
 }
 
+function isTournamentPayType(eventType: ClubEventType) {
+  return isTournamentEventType(eventType);
+}
+
 export default function PaySetupManagerClient() {
   const access = useAuthSession();
   const payTypes = useFirestoreCollection("payTypes");
   const coaches = useFirestoreCollection("coaches");
-  const [selectedPayTypeId, setSelectedPayTypeId] = useState<string | null>(null);
-  const [payTypeDraft, setPayTypeDraft] = useState<PayTypeDraft>(emptyPayTypeDraft);
+  const [selectedPayTypeId, setSelectedPayTypeId] = useState<string | null>(
+    null,
+  );
+  const [payTypeDraft, setPayTypeDraft] =
+    useState<PayTypeDraft>(emptyPayTypeDraft);
   const [savingPayType, setSavingPayType] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +99,9 @@ export default function PaySetupManagerClient() {
   const sortedCoaches = useMemo(
     () =>
       [...coaches.data].sort((left, right) =>
-        `${left.lastName} ${left.firstName}`.localeCompare(`${right.lastName} ${right.firstName}`),
+        `${left.lastName} ${left.firstName}`.localeCompare(
+          `${right.lastName} ${right.firstName}`,
+        ),
       ),
     [coaches.data],
   );
@@ -77,10 +109,14 @@ export default function PaySetupManagerClient() {
   function beginEditPayType(payType: PayTypeDocument) {
     setSelectedPayTypeId(payType.id);
     setPayTypeDraft({
-      eventType: payType.eventType ?? "tournament",
+      eventType: isTournamentPayType(payType.eventType ?? "tournament")
+        ? "tournament"
+        : (payType.eventType ?? "tournament"),
+      tournamentDayCount: String(getPayTypeTournamentDayCount(payType)),
       description: payType.description,
       value: String(payType.value ?? 0),
       defaulted: payType.defaulted,
+      mealStipendAmount: String(payType.mealStipendAmount ?? 0),
     });
     setStatus(null);
     setError(null);
@@ -100,11 +136,24 @@ export default function PaySetupManagerClient() {
     }
 
     const value = payTypeDraft.value.trim() ? Number(payTypeDraft.value) : 0;
+    const isTournament = isTournamentPayType(payTypeDraft.eventType);
+    const tournamentDayCount = payTypeDraft.tournamentDayCount.trim()
+      ? Number(payTypeDraft.tournamentDayCount)
+      : 1;
+    const mealStipendAmount = payTypeDraft.mealStipendAmount.trim()
+      ? Number(payTypeDraft.mealStipendAmount)
+      : 0;
+    const eventType: ClubEventType = isTournament
+      ? "tournament"
+      : payTypeDraft.eventType;
     const payload = {
-      eventType: payTypeDraft.eventType,
+      eventType,
+      tournamentDayCount: isTournament ? tournamentDayCount : 1,
       description: payTypeDraft.description.trim(),
       value,
       defaulted: payTypeDraft.defaulted,
+      mealStipend: isTournament && mealStipendAmount > 0,
+      mealStipendAmount: isTournament ? mealStipendAmount : 0,
     };
 
     if (!payload.eventType || !payload.description) {
@@ -114,6 +163,23 @@ export default function PaySetupManagerClient() {
 
     if (Number.isNaN(payload.value) || payload.value < 0) {
       setError("Value must be a valid amount.");
+      return;
+    }
+
+    if (
+      Number.isNaN(payload.mealStipendAmount) ||
+      payload.mealStipendAmount < 0
+    ) {
+      setError("Meal stipend must be a valid amount.");
+      return;
+    }
+
+    if (
+      isTournamentPayType(payload.eventType) &&
+      (Number.isNaN(payload.tournamentDayCount) ||
+        payload.tournamentDayCount <= 0)
+    ) {
+      setError("Tournament days must be selected.");
       return;
     }
 
@@ -132,7 +198,9 @@ export default function PaySetupManagerClient() {
 
       resetPayTypeForm();
     } catch (submitError) {
-      setError(getFriendlyFirebaseError(submitError, "Unable to save pay type."));
+      setError(
+        getFriendlyFirebaseError(submitError, "Unable to save pay type."),
+      );
     } finally {
       setSavingPayType(false);
     }
@@ -160,11 +228,17 @@ export default function PaySetupManagerClient() {
       }
       setStatus("Pay type deleted.");
     } catch (deleteError) {
-      setError(getFriendlyFirebaseError(deleteError, "Unable to delete pay type."));
+      setError(
+        getFriendlyFirebaseError(deleteError, "Unable to delete pay type."),
+      );
     }
   }
 
-  async function toggleCoachPayType(coach: CoachDocument, payTypeId: string, checked: boolean) {
+  async function toggleCoachPayType(
+    coach: CoachDocument,
+    payTypeId: string,
+    checked: boolean,
+  ) {
     if (!isAdmin) {
       setError("Only admins can assign coach pay types.");
       return;
@@ -184,7 +258,12 @@ export default function PaySetupManagerClient() {
       });
       setStatus("Coach pay types updated.");
     } catch (updateError) {
-      setError(getFriendlyFirebaseError(updateError, "Unable to update coach pay types."));
+      setError(
+        getFriendlyFirebaseError(
+          updateError,
+          "Unable to update coach pay types.",
+        ),
+      );
     }
   }
 
@@ -199,7 +278,9 @@ export default function PaySetupManagerClient() {
 
       {access.loading ? (
         <SectionCard title="Loading" kicker="Pay Setup">
-          <p className="text-sm leading-7 text-[color:var(--muted)]">Checking your admin access...</p>
+          <p className="text-sm leading-7 text-[color:var(--muted)]">
+            Checking your admin access...
+          </p>
         </SectionCard>
       ) : !isAdmin ? (
         <SectionCard title="Admin Required" kicker="Pay Setup">
@@ -208,166 +289,267 @@ export default function PaySetupManagerClient() {
           </p>
         </SectionCard>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[0.85fr_1.15fr]">
-          <SectionCard title={selectedPayTypeId ? "Edit Pay Type" : "Add Pay Type"} kicker="Coach Pay">
-            <form className="grid gap-4 md:grid-cols-2" onSubmit={handlePayTypeSubmit}>
-              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                <span>
-                  Event type <span className="text-[#b42318]">*</span>
-                </span>
-                <select
-                  value={payTypeDraft.eventType}
-                  onChange={(event) =>
-                    setPayTypeDraft((current) => ({
-                      ...current,
-                      eventType: event.target.value as ClubEventType,
-                    }))
-                  }
-                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                >
-                  {eventTypeOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                <span>
-                  Value <span className="text-[#b42318]">*</span>
-                </span>
-                <input
-                  value={payTypeDraft.value}
-                  onChange={(event) => setPayTypeDraft((current) => ({ ...current, value: event.target.value }))}
-                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  inputMode="decimal"
-                  placeholder="30.00"
-                />
-              </label>
-              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                <span>
-                  Description <span className="text-[#b42318]">*</span>
-                </span>
-                <input
-                  value={payTypeDraft.description}
-                  onChange={(event) =>
-                    setPayTypeDraft((current) => ({ ...current, description: event.target.value }))
-                  }
-                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  placeholder="Example: 2 day tournament meal stipend"
-                />
-              </label>
-              <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                <input
-                  type="checkbox"
-                  checked={payTypeDraft.defaulted}
-                  onChange={(event) =>
-                    setPayTypeDraft((current) => ({ ...current, defaulted: event.target.checked }))
-                  }
-                />
-                Assign to new coaches by default
-              </label>
-              <div className="md:col-span-2 flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  disabled={savingPayType}
-                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {savingPayType ? "Saving..." : selectedPayTypeId ? "Save Pay Type" : "Add Pay Type"}
-                </button>
-                {selectedPayTypeId && (
-                  <button
-                    type="button"
-                    onClick={resetPayTypeForm}
-                    className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+        <MatchedAdminColumns
+          columnsClassName="lg:grid-cols-[0.85fr_1.15fr]"
+          left={
+            <SectionCard
+              title={selectedPayTypeId ? "Edit Pay Type" : "Add Pay Type"}
+              kicker="Coach Pay"
+            >
+              <form
+                className="grid gap-4 md:grid-cols-2"
+                onSubmit={handlePayTypeSubmit}
+              >
+                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  <span>
+                    Event type <span className="text-[#b42318]">*</span>
+                  </span>
+                  <select
+                    value={payTypeDraft.eventType}
+                    onChange={(event) =>
+                      setPayTypeDraft((current) => ({
+                        ...current,
+                        eventType: event.target.value as ClubEventType,
+                        mealStipendAmount: isTournamentPayType(
+                          event.target.value as ClubEventType,
+                        )
+                          ? current.mealStipendAmount
+                          : "",
+                        tournamentDayCount: isTournamentPayType(
+                          event.target.value as ClubEventType,
+                        )
+                          ? current.tournamentDayCount
+                          : "1",
+                      }))
+                    }
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                   >
-                    Cancel Edit
-                  </button>
+                    {eventTypeOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  <span>
+                    Value <span className="text-[#b42318]">*</span>
+                  </span>
+                  <input
+                    value={payTypeDraft.value}
+                    onChange={(event) =>
+                      setPayTypeDraft((current) => ({
+                        ...current,
+                        value: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    inputMode="decimal"
+                    placeholder="30.00"
+                  />
+                </label>
+                {isTournamentPayType(payTypeDraft.eventType) && (
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Days
+                    <select
+                      value={payTypeDraft.tournamentDayCount}
+                      onChange={(event) =>
+                        setPayTypeDraft((current) => ({
+                          ...current,
+                          tournamentDayCount: event.target.value,
+                        }))
+                      }
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    >
+                      {[1, 2, 3, 4].map((dayCount) => (
+                        <option key={dayCount} value={dayCount}>
+                          {formatTournamentDayCount(dayCount)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 )}
-              </div>
-            </form>
-          </SectionCard>
-
-          <SectionCard title="Current Pay Types" kicker="Coach Assignments">
-            <div className="space-y-3">
-              {payTypes.loading ? (
-                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                  Loading pay types...
-                </div>
-              ) : sortedPayTypes.length === 0 ? (
-                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                  No pay types have been added yet.
-                </div>
-              ) : (
-                sortedPayTypes.map((payType) => (
-                  <div
-                    key={payType.id}
-                    className="rounded-[1.25rem] border border-[color:var(--line)] bg-white px-4 py-4"
+                <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  <span>
+                    Description <span className="text-[#b42318]">*</span>
+                  </span>
+                  <input
+                    value={payTypeDraft.description}
+                    onChange={(event) =>
+                      setPayTypeDraft((current) => ({
+                        ...current,
+                        description: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    placeholder="Example: 2 day tournament meal stipend"
+                  />
+                </label>
+                <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  <input
+                    type="checkbox"
+                    checked={payTypeDraft.defaulted}
+                    onChange={(event) =>
+                      setPayTypeDraft((current) => ({
+                        ...current,
+                        defaulted: event.target.checked,
+                      }))
+                    }
+                  />
+                  Assign to new coaches by default
+                </label>
+                {isTournamentPayType(payTypeDraft.eventType) && (
+                  <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Meal stipend amount
+                    <input
+                      value={payTypeDraft.mealStipendAmount}
+                      onChange={(event) =>
+                        setPayTypeDraft((current) => ({
+                          ...current,
+                          mealStipendAmount: event.target.value,
+                        }))
+                      }
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                      inputMode="decimal"
+                      placeholder="0.00"
+                    />
+                  </label>
+                )}
+                <div className="md:col-span-2 flex flex-wrap gap-3">
+                  <button
+                    type="submit"
+                    disabled={savingPayType}
+                    className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                      <div>
-                        <p className="font-semibold text-[color:var(--ink)]">{payType.description}</p>
-                        <p className="mt-1 text-sm text-[color:var(--muted)]">
-                          {formatEventType(payType.eventType ?? "tournament")} · {formatMoney(payType.value)}
-                          {payType.defaulted ? " · default" : ""}
-                        </p>
-                        <div className="mt-4 grid gap-2">
-                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                            Coach assignments
+                    {savingPayType
+                      ? "Saving..."
+                      : selectedPayTypeId
+                        ? "Save Pay Type"
+                        : "Add Pay Type"}
+                  </button>
+                  {selectedPayTypeId && (
+                    <button
+                      type="button"
+                      onClick={resetPayTypeForm}
+                      className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
+              </form>
+            </SectionCard>
+          }
+          right={
+            <SectionCard title="Current Pay Types" kicker="Coach Assignments">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+                {payTypes.loading ? (
+                  <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                    Loading pay types...
+                  </div>
+                ) : sortedPayTypes.length === 0 ? (
+                  <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                    No pay types have been added yet.
+                  </div>
+                ) : (
+                  sortedPayTypes.map((payType) => (
+                    <div
+                      key={payType.id}
+                      className="rounded-[1.25rem] border border-[color:var(--line)] bg-white px-4 py-4"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="font-semibold text-[color:var(--ink)]">
+                            {payType.description}
                           </p>
-                          {coaches.loading ? (
-                            <p className="text-sm text-[color:var(--muted)]">Loading coaches...</p>
-                          ) : sortedCoaches.length === 0 ? (
-                            <p className="text-sm text-[color:var(--muted)]">No coaches have been added yet.</p>
-                          ) : (
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              {sortedCoaches.map((coach) => (
-                                <label
-                                  key={coach.id}
-                                  className="flex items-center gap-2 text-sm font-medium text-[color:var(--ink)]"
-                                >
-                                  <input
-                                    type="checkbox"
-                                    checked={getCoachPayTypeIds(coach).includes(payType.id)}
-                                    onChange={(event) =>
-                                      void toggleCoachPayType(coach, payType.id, event.target.checked)
-                                    }
-                                  />
-                                  <span>
-                                    {coach.firstName} {coach.lastName}
-                                  </span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
+                          <p className="mt-1 text-sm text-[color:var(--muted)]">
+                            {formatEventType(payType.eventType ?? "tournament")}{" "}
+                            · {formatMoney(payType.value)}
+                            {isTournamentPayType(
+                              payType.eventType ?? "tournament",
+                            )
+                              ? ` · ${formatTournamentDayCount(getPayTypeTournamentDayCount(payType))}`
+                              : ""}
+                            {payType.defaulted ? " · default" : ""}
+                            {(payType.mealStipendAmount ?? 0) > 0
+                              ? ` · meal stipend ${formatMoney(payType.mealStipendAmount ?? 0)}`
+                              : ""}
+                          </p>
+                          <div className="mt-4 grid gap-2">
+                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                              Coach assignments
+                            </p>
+                            {coaches.loading ? (
+                              <p className="text-sm text-[color:var(--muted)]">
+                                Loading coaches...
+                              </p>
+                            ) : sortedCoaches.length === 0 ? (
+                              <p className="text-sm text-[color:var(--muted)]">
+                                No coaches have been added yet.
+                              </p>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {sortedCoaches.map((coach) => (
+                                  <label
+                                    key={coach.id}
+                                    className="flex items-center gap-2 text-sm font-medium text-[color:var(--ink)]"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={getCoachPayTypeIds(
+                                        coach,
+                                      ).includes(payType.id)}
+                                      onChange={(event) =>
+                                        void toggleCoachPayType(
+                                          coach,
+                                          payType.id,
+                                          event.target.checked,
+                                        )
+                                      }
+                                    />
+                                    <span>
+                                      {coach.firstName} {coach.lastName}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => beginEditPayType(payType)}
+                            className="rounded-full border border-[color:var(--line)] px-3 py-2 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void deletePayType(
+                                payType.id,
+                                payType.description,
+                              )
+                            }
+                            className="rounded-full border border-[#e7b8b8] px-3 py-2 text-xs font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2]"
+                          >
+                            Delete
+                          </button>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => beginEditPayType(payType)}
-                          className="rounded-full border border-[color:var(--line)] px-3 py-2 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void deletePayType(payType.id, payType.description)}
-                          className="rounded-full border border-[#e7b8b8] px-3 py-2 text-xs font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2]"
-                        >
-                          Delete
-                        </button>
-                      </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </SectionCard>
-        </div>
+                  ))
+                )}
+              </div>
+            </SectionCard>
+          }
+        />
       )}
 
-      {status && <p className="mt-4 text-sm text-[color:var(--muted)]">{status}</p>}
+      {status && (
+        <p className="mt-4 text-sm text-[color:var(--muted)]">{status}</p>
+      )}
       {error && (
         <div className="mt-4 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
           {error}

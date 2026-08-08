@@ -7,6 +7,11 @@ import { useAuthSession } from "@/lib/firebase/auth";
 import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import type { PlayerDocument, UserDocument, UserRole } from "@/lib/firebase/schema";
 import { compareTeamsByAge } from "@/lib/team-sort";
+import {
+  formatTournamentDayCount,
+  getPayTypeTournamentDayCount,
+  isTournamentEventType,
+} from "@/lib/tournament-events";
 
 type RoleSelection = UserRole | "inactive";
 type CoachSetupDraft = {
@@ -83,6 +88,10 @@ function getRoleSelection(user: UserDocument): RoleSelection {
 
 function isPlayerDocument(player: PlayerDocument | undefined): player is PlayerDocument {
   return Boolean(player);
+}
+
+function sortIds(list: string[]) {
+  return [...list].sort((left, right) => left.localeCompare(right));
 }
 
 export default function UserSetupManagerClient() {
@@ -337,6 +346,17 @@ export default function UserSetupManagerClient() {
         coachId,
         active: true,
       });
+
+      await Promise.all(
+        coachSetupDraft.teamIds.map((teamId) => {
+          const team = teams.data.find((entry) => entry.id === teamId);
+          const nextCoachIds = sortIds(Array.from(new Set([...(team?.coachIds ?? []), coachId])));
+
+          return firestoreApi.teams.update(teamId, {
+            coachIds: nextCoachIds,
+          });
+        }),
+      );
       setPendingRoleByUserId((current) => {
         const next = { ...current };
         delete next[user.id];
@@ -738,7 +758,13 @@ export default function UserSetupManagerClient() {
                             />
                             <span>
                               {payType.description} · ${payType.value}
+                              {isTournamentEventType(payType.eventType)
+                                ? ` · ${formatTournamentDayCount(getPayTypeTournamentDayCount(payType))}`
+                                : ""}
                               {payType.defaulted ? " · default" : ""}
+                              {(payType.mealStipendAmount ?? 0) > 0
+                                ? ` · meal stipend $${payType.mealStipendAmount}`
+                                : ""}
                             </span>
                           </label>
                       ))}

@@ -351,6 +351,7 @@ export default function PracticePlanningClient() {
       teamSchedules: event.teamSchedules || [],
       expenseTriggered: [],
       ageGroup: event.ageGroup || "",
+      ageGroups: event.ageGroups || [],
       price: event.price || 0,
       paymentUrl: event.paymentUrl || "",
       externalUrl: event.externalUrl || "",
@@ -364,6 +365,7 @@ export default function PracticePlanningClient() {
       practicePublished: event.practicePublished,
       location: event.location || "",
       notes: event.notes || "",
+      fullDetails: event.fullDetails || "",
       active: event.active !== false,
     });
   }
@@ -560,6 +562,7 @@ export default function PracticePlanningClient() {
             teamSchedules: [{ teamId: team.id, scheduleUrl: "" }],
             expenseTriggered: [],
             ageGroup: "",
+            ageGroups: [],
             price: 0,
             paymentUrl: "",
             externalUrl: "",
@@ -573,6 +576,7 @@ export default function PracticePlanningClient() {
             practicePublished: false,
             location: `${getGymSpaceLocation(slot.gymSpace)} - Court ${courtNumber}`,
             notes: conflictNames.length > 0 ? `Conflicts: ${[...new Set(conflictNames)].join(", ")}` : "",
+            fullDetails: "",
             active: true,
           }),
         ),

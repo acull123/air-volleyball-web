@@ -1,5 +1,6 @@
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFunctions } from "firebase/functions";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -55,6 +56,7 @@ export const firebaseApp = (() => {
 export const db = firebaseApp ? getFirestore(firebaseApp) : null;
 export const auth = firebaseApp ? getAuth(firebaseApp) : null;
 export const storage = firebaseApp ? getStorage(firebaseApp) : null;
+export const functions = firebaseApp ? getFunctions(firebaseApp) : null;
 
 export function requireDb() {
   if (!db) {
@@ -74,6 +76,16 @@ export function requireStorage() {
   }
 
   return storage;
+}
+
+export function requireFunctions() {
+  if (!functions) {
+    throw new Error(
+      "Firebase Functions has not been initialized. Check lib/firebase/client.ts or your NEXT_PUBLIC_FIREBASE_* env vars.",
+    );
+  }
+
+  return functions;
 }
 
 let analyticsPromise: Promise<import("firebase/analytics").Analytics | null> | null = null;

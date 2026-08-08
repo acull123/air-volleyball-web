@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
@@ -8,7 +8,7 @@ import { formatEventStatus, getEventStatus, shouldShowEventStatus } from "@/lib/
 import { getEventTeamSchedules } from "@/lib/event-teams";
 import { useFirestoreDocument, useFirestoreCollection } from "@/lib/firebase";
 import type { EventDocument } from "@/lib/firebase/schema";
-import { toExternalHref } from "@/lib/url";
+import { formatTournamentEventLabel, isTournamentEventType } from "@/lib/tournament-events";
 
 function getEventIdFromLocation() {
   if (typeof window === "undefined") {
@@ -77,10 +77,6 @@ function formatMoney(amount: number) {
 }
 
 function formatEventType(type: EventDocument["type"]) {
-  if (type === "twoDayTournament") {
-    return "2 Day Tournament";
-  }
-
   if (type === "areaCamp") {
     return "Area Camp";
   }
@@ -96,18 +92,22 @@ function formatEventType(type: EventDocument["type"]) {
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
-export default function EventDetailsPage() {
-  const [eventId, setEventId] = useState("");
+function formatAgeGroups(event: EventDocument) {
+  const ageGroups = event.ageGroups?.length ? event.ageGroups : event.ageGroup ? [event.ageGroup] : [];
 
-  useEffect(() => {
-    setEventId(getEventIdFromLocation());
-  }, []);
+  return ageGroups.length > 0 ? ageGroups.join(", ") : "";
+}
+
+export default function EventDetailsPage() {
+  const [eventId] = useState(getEventIdFromLocation);
 
   const event = useFirestoreDocument("events", eventId, { enabled: Boolean(eventId) });
   const teams = useFirestoreCollection("teams");
 
   const teamSchedules = event.data ? getEventTeamSchedules(event.data) : [];
   const eventStatus = event.data ? getEventStatus(event.data) : "none";
+  const fullDetails = event.data?.fullDetails?.trim() ?? "";
+  const ageGroupLabel = event.data ? formatAgeGroups(event.data) : "";
 
   return (
     <>
@@ -138,7 +138,9 @@ export default function EventDetailsPage() {
           <div>
             <div>
               <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">
-                {formatEventType(event.data.type)}
+                {isTournamentEventType(event.data.type)
+                  ? formatTournamentEventLabel(event.data)
+                  : formatEventType(event.data.type)}
               </p>
               <div className="mt-5 space-y-3 text-sm leading-7 text-[color:var(--muted)]">
                 <p>
@@ -179,9 +181,9 @@ export default function EventDetailsPage() {
                     </div>
                   </div>
                 )}
-                {event.data.ageGroup && (
+                {ageGroupLabel && (
                   <p>
-                    <span className="font-semibold text-[color:var(--ink)]">Age group:</span> {event.data.ageGroup}
+                    <span className="font-semibold text-[color:var(--ink)]">Age group:</span> {ageGroupLabel}
                   </p>
                 )}
                 <p>
@@ -191,6 +193,16 @@ export default function EventDetailsPage() {
               </div>
               {event.data.notes && (
                 <p className="mt-6 text-sm leading-7 text-[color:var(--muted)]">{event.data.notes}</p>
+              )}
+              {fullDetails && (
+                <div className="mt-8 rounded-3xl border border-[color:var(--line)] bg-white p-6">
+                  <p className="text-sm font-bold uppercase tracking-[0.2em] text-[color:var(--muted)]">
+                    Full Details
+                  </p>
+                  <p className="mt-4 whitespace-pre-line text-sm leading-7 text-[color:var(--muted)]">
+                    {fullDetails}
+                  </p>
+                </div>
               )}
             </div>
           </div>

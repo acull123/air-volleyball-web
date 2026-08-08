@@ -168,7 +168,7 @@ export default function AboutPage() {
         description="The official club message centers on delivering the best volleyball club program in the Chippewa Valley through strong coaching, long-term athlete growth, and a high standard for effort."
         actions={[
           { href: "/teams", label: "Meet The Teams" },
-          { href: "/login", label: "View Parent Portal", variant: "secondary" },
+          { href: "/login", label: "View Portal", variant: "secondary" },
         ]}
       />
 

@@ -76,19 +76,13 @@ export default function ProfilePageClient() {
         />
         <SectionCard title="Account Access" kicker="Sign In">
           <div className="space-y-4 text-sm leading-7 text-[color:var(--muted)]">
-            <p>Sign in through the appropriate portal, then return here to manage your profile.</p>
+            <p>Sign in through the portal, then return here to manage your profile.</p>
             <div className="flex flex-wrap gap-3">
               <Link
                 href="/login"
                 className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white"
               >
-                Player Portal
-              </Link>
-              <Link
-                href="/admin"
-                className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-              >
-                Admin Login
+                Portal Login
               </Link>
             </div>
           </div>

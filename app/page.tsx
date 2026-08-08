@@ -14,6 +14,7 @@ import { useAuthSession } from "@/lib/firebase/auth";
 import type { Event } from "./types/models";
 import type { EventDocument, PlayerDocument, TeamDocument } from "@/lib/firebase/schema";
 import { isCurrentPlayer } from "@/lib/player-status";
+import { isTournamentEventType } from "@/lib/tournament-events";
 
 const favoritePreferenceCookieName = "air-favorite-preference";
 const favoritePreferenceDismissedCookieName = "air-favorite-prompt-dismissed";
@@ -23,9 +24,33 @@ type FavoritePreference = {
   playerIds: string[];
 };
 
+type HomeEventFilterKey = "camp" | "tryout" | "clinic" | "practice" | "tournament";
+type HomeEventFilters = Record<HomeEventFilterKey, boolean>;
+
 const scheelsLogoUrl =
   "https://res.cloudinary.com/dlwdq84ig/image/upload/w_3840%2Cq_auto%2Cc_scale/x1qgcm5jcooqwptm0kbq";
 const homeCardBorder = "border border-[#b8dcff]";
+const homeEventFilterOptions: Array<{ key: HomeEventFilterKey; label: string }> = [
+  { key: "camp", label: "Camps" },
+  { key: "tryout", label: "Tryouts" },
+  { key: "clinic", label: "Clinics" },
+  { key: "practice", label: "Practices" },
+  { key: "tournament", label: "Tournaments" },
+];
+const defaultUpcomingEventFilters: HomeEventFilters = {
+  camp: true,
+  tryout: true,
+  clinic: true,
+  practice: false,
+  tournament: false,
+};
+const defaultRecommendedEventFilters: HomeEventFilters = {
+  camp: true,
+  tryout: true,
+  clinic: true,
+  practice: true,
+  tournament: true,
+};
 
 function getEventHref(event: EventDocument) {
   if (event.type === "camp" || event.type === "tryout") {
@@ -46,13 +71,15 @@ function buildEventCardItem(event: EventDocument): Event {
     eventType:
       event.type === "tryout"
         ? "tryouts"
-        : event.type === "twoDayTournament"
+        : isTournamentEvent(event)
           ? "tournament"
         : event.type === "areaCamp"
           ? "camp"
           : event.type === "refScoringClinic"
             ? "clinic"
-            : event.type,
+            : event.type === "camp" || event.type === "practice"
+              ? event.type
+              : "practice",
     description: event.notes,
     startsAt: `${event.startDate}T${event.startTime || "00:00"}`,
     endsAt: `${event.endDate || event.startDate}T${event.endTime || event.startTime || "00:00"}`,
@@ -197,8 +224,74 @@ function isCurrentOrFutureEvent(event: EventDocument) {
   return !eventEndDate || eventEndDate >= todayKey;
 }
 
-function getEventAgeGroup(event: EventDocument) {
-  return event.ageGroup || (event as EventDocument & { ageGroups?: string[] }).ageGroups?.[0] || "";
+function getEventAgeGroups(event: EventDocument) {
+  if (event.ageGroups?.length) {
+    return event.ageGroups;
+  }
+
+  return event.ageGroup ? [event.ageGroup] : [];
+}
+
+function isTournamentEvent(event: EventDocument) {
+  return isTournamentEventType(event.type);
+}
+
+function getHomeEventFilterKey(event: EventDocument): HomeEventFilterKey | null {
+  if (event.type === "camp") {
+    return "camp";
+  }
+
+  if (event.type === "tryout") {
+    return "tryout";
+  }
+
+  if (event.type === "refScoringClinic") {
+    return "clinic";
+  }
+
+  if (event.type === "practice") {
+    return "practice";
+  }
+
+  if (isTournamentEvent(event)) {
+    return "tournament";
+  }
+
+  return null;
+}
+
+function filterByEventTypeToggles(event: EventDocument, filters: HomeEventFilters) {
+  const key = getHomeEventFilterKey(event);
+
+  return key ? filters[key] : true;
+}
+
+function EventTypeToggles({
+  filters,
+  onToggle,
+}: {
+  filters: HomeEventFilters;
+  onToggle: (key: HomeEventFilterKey) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {homeEventFilterOptions.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          onClick={() => onToggle(option.key)}
+          aria-pressed={filters[option.key]}
+          className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+            filters[option.key]
+              ? "border-[color:var(--ink)] bg-[color:var(--ink)] text-white"
+              : "border-[color:var(--line)] text-[color:var(--ink)] hover:bg-[color:var(--paper)]"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export default function HomePage() {
@@ -215,6 +308,9 @@ export default function HomePage() {
   const [favoritePreferenceOverride, setFavoritePreferenceOverride] = useState<FavoritePreference | null>(null);
   const [favoriteDialogForcedOpen, setFavoriteDialogForcedOpen] = useState(false);
   const [favoriteDialogDismissed, setFavoriteDialogDismissed] = useState(false);
+  const [upcomingEventFilters, setUpcomingEventFilters] = useState<HomeEventFilters>(defaultUpcomingEventFilters);
+  const [recommendedEventFilters, setRecommendedEventFilters] =
+    useState<HomeEventFilters>(defaultRecommendedEventFilters);
   const favoritePreference = clientReady
     ? favoritePreferenceOverride ?? readFavoritePreferenceCookie()
     : favoritePreferenceOverride;
@@ -241,6 +337,7 @@ export default function HomePage() {
       .filter(isPubliclyVisibleEvent)
       .filter(isCurrentOrFutureEvent)
       .filter((event) => event.type !== "areaCamp")
+      .filter((event) => filterByEventTypeToggles(event, upcomingEventFilters))
       .sort((a, b) => {
         const left = new Date(`${a.startDate}T${a.startTime || "00:00"}`).getTime();
         const right = new Date(`${b.startDate}T${b.startTime || "00:00"}`).getTime();
@@ -248,7 +345,7 @@ export default function HomePage() {
       })
       .slice(0, 4)
       .map(buildEventCardItem);
-  }, [events.data]);
+  }, [events.data, upcomingEventFilters]);
 
   const recommendedState = useMemo(() => {
     if (
@@ -258,6 +355,7 @@ export default function HomePage() {
       return {
         title: "",
         events: [] as Event[],
+        hasEvents: false,
       };
     }
     const favoriteTeams = teams.data.filter((team) => recommendationPreference.teamIds.includes(team.id));
@@ -275,7 +373,7 @@ export default function HomePage() {
         .filter((ageGroup): ageGroup is string => Boolean(ageGroup)),
     ]);
 
-    const recommendedEvents = events.data
+    const matchingRecommendedEvents = events.data
       .filter(isPubliclyVisibleEvent)
       .filter(isCurrentOrFutureEvent)
       .filter((event) => event.type !== "areaCamp")
@@ -284,18 +382,30 @@ export default function HomePage() {
         return eventTeamIds.length === 0 || eventTeamIds.some((teamId) => relatedTeamIds.has(teamId));
       })
       .filter((event) => {
-        const eventAgeGroup = getEventAgeGroup(event);
+        const eventAgeGroups = getEventAgeGroups(event);
 
-        if (!eventAgeGroup) {
+        if (eventAgeGroups.length === 0) {
           return true;
         }
 
-        if (relatedAgeGroups.has(eventAgeGroup)) {
+        if (eventAgeGroups.some((eventAgeGroup) => relatedAgeGroups.has(eventAgeGroup))) {
           return true;
         }
 
-        return favoritePlayers.some((player) => getAgeGroupForPlayer(player, event, teams.data) === eventAgeGroup);
+        return favoritePlayers.some((player) => {
+          const playerAgeGroup = getAgeGroupForPlayer(player, event, teams.data);
+
+          return Boolean(playerAgeGroup && eventAgeGroups.includes(playerAgeGroup));
+        });
       })
+      .sort((a, b) => {
+        const left = new Date(`${a.startDate}T${a.startTime || "00:00"}`).getTime();
+        const right = new Date(`${b.startDate}T${b.startTime || "00:00"}`).getTime();
+        return left - right;
+      });
+
+    const recommendedEvents = matchingRecommendedEvents
+      .filter((event) => filterByEventTypeToggles(event, recommendedEventFilters))
       .sort((a, b) => {
         const left = new Date(`${a.startDate}T${a.startTime || "00:00"}`).getTime();
         const right = new Date(`${b.startDate}T${b.startTime || "00:00"}`).getTime();
@@ -310,8 +420,16 @@ export default function HomePage() {
           ? "Recommended For Your Linked Players"
           : "Recommended For Your Favorites",
       events: recommendedEvents,
+      hasEvents: matchingRecommendedEvents.length > 0,
     };
-  }, [events.data, players.data, recommendationPreference, recommendationSource, teams.data]);
+  }, [
+    events.data,
+    players.data,
+    recommendationPreference,
+    recommendationSource,
+    recommendedEventFilters,
+    teams.data,
+  ]);
 
   const summary = useMemo(
     () => ({
@@ -334,6 +452,14 @@ export default function HomePage() {
     setFavoriteDialogForcedOpen(false);
     setFavoriteDialogDismissed(true);
     setCookie(favoritePreferenceDismissedCookieName, "1", 30);
+  }
+
+  function toggleUpcomingEventFilter(key: HomeEventFilterKey) {
+    setUpcomingEventFilters((current) => ({ ...current, [key]: !current[key] }));
+  }
+
+  function toggleRecommendedEventFilter(key: HomeEventFilterKey) {
+    setRecommendedEventFilters((current) => ({ ...current, [key]: !current[key] }));
   }
 
   return (
@@ -364,28 +490,34 @@ export default function HomePage() {
         ]}
       />
 
-      {recommendationPreference && (
+      {recommendationPreference && recommendedState.hasEvents && (
         <SectionCard
           title={recommendedState.title}
           kicker="Recommended Events"
           headerAction={
-            recommendationSource === "favorites" ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setFavoriteDialogDismissed(false);
-                  setFavoriteDialogForcedOpen(true);
-                }}
-                className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-              >
-                Change Favorite
-              </button>
-            ) : null
+            <div className="flex flex-wrap items-center gap-3">
+              <EventTypeToggles
+                filters={recommendedEventFilters}
+                onToggle={toggleRecommendedEventFilter}
+              />
+              {recommendationSource === "favorites" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFavoriteDialogDismissed(false);
+                    setFavoriteDialogForcedOpen(true);
+                  }}
+                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                >
+                  Change Favorite
+                </button>
+              )}
+            </div>
           }
         >
           {recommendedState.events.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
-              No recommended events are available yet for this favorite.
+              No recommended events match the selected filters.
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -397,7 +529,16 @@ export default function HomePage() {
         </SectionCard>
       )}
 
-      <SectionCard title="Upcoming Events" kicker="Schedule">
+      <SectionCard
+        title="Upcoming Events"
+        kicker="Schedule"
+        headerAction={
+          <EventTypeToggles
+            filters={upcomingEventFilters}
+            onToggle={toggleUpcomingEventFilter}
+          />
+        }
+      >
         {events.loading ? (
           <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
             Loading upcoming events...

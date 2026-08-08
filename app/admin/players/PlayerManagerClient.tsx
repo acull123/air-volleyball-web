@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
+import MatchedAdminColumns from "@/app/admin/components/MatchedAdminColumns";
+import {
+  firestoreApi,
+  useFirestoreCollection,
+  getFriendlyFirebaseError,
+} from "@/lib/firebase";
 import { comparePlayersByName } from "@/lib/player-name";
 import { compareTeamsByAge } from "@/lib/team-sort";
 import type { PlayerDocument } from "@/lib/firebase/schema";
@@ -116,7 +121,9 @@ function mapPlayerToDraft(player: PlayerDocument): PlayerDraft {
     grade: player.grade ?? "",
     height: player.height ?? "",
     guardianFirstName:
-      player.guardianFirstName ?? (player as PlayerDocument & { guardianName?: string }).guardianName ?? "",
+      player.guardianFirstName ??
+      (player as PlayerDocument & { guardianName?: string }).guardianName ??
+      "",
     guardianLastName: player.guardianLastName ?? "",
     guardianEmail: player.guardianEmail ?? "",
     phone: player.phone ?? "",
@@ -139,7 +146,8 @@ function mapPlayerToDraft(player: PlayerDocument): PlayerDraft {
     emergencyContactPhone: player.emergencyContactPhone ?? "",
     medicalConditions: player.medicalConditions ?? "",
     medications: player.medications ?? "",
-    concussionDiagnosedPast24Months: player.concussionDiagnosedPast24Months ?? "",
+    concussionDiagnosedPast24Months:
+      player.concussionDiagnosedPast24Months ?? "",
     concussionDiagnosisDate: player.concussionDiagnosisDate ?? "",
     allergies: player.allergies ?? "",
     registrationTimestamp: player.registrationTimestamp ?? "",
@@ -198,14 +206,23 @@ export default function PlayerManagerClient() {
 
       setSelectedPlayerId(player.id);
       setDraft(mapPlayerToDraft(player));
-      setSearchTerm(initialSearchTerm || `${player.firstName} ${player.lastName}`.trim());
+      setSearchTerm(
+        initialSearchTerm || `${player.firstName} ${player.lastName}`.trim(),
+      );
       setSelectedPhotoName("");
       setSelectedPhotoFile(null);
       setPhotoUrlToDelete("");
       setStatus(null);
       setError(null);
     });
-  }, [initialPlayerId, initialSearchTerm, players.data, players.loading, searchTerm, selectedPlayerId]);
+  }, [
+    initialPlayerId,
+    initialSearchTerm,
+    players.data,
+    players.loading,
+    searchTerm,
+    selectedPlayerId,
+  ]);
 
   const filteredPlayers = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -216,7 +233,8 @@ export default function PlayerManagerClient() {
     }
 
     return sorted.filter((player) => {
-      const teamName = teams.data.find((team) => team.id === player.teamId)?.name ?? "";
+      const teamName =
+        teams.data.find((team) => team.id === player.teamId)?.name ?? "";
       const haystack = [
         player.firstName,
         player.lastName,
@@ -233,7 +251,10 @@ export default function PlayerManagerClient() {
     });
   }, [players.data, searchTerm, teams.data]);
 
-  const sortedTeams = useMemo(() => [...teams.data].sort(compareTeamsByAge), [teams.data]);
+  const sortedTeams = useMemo(
+    () => [...teams.data].sort(compareTeamsByAge),
+    [teams.data],
+  );
 
   function resetForm() {
     setSelectedPlayerId(null);
@@ -281,7 +302,8 @@ export default function PlayerManagerClient() {
 
     try {
       const previousPhotoUrl =
-        photoUrlToDelete || (selectedPhotoFile && draft.photoUrl ? draft.photoUrl : "");
+        photoUrlToDelete ||
+        (selectedPhotoFile && draft.photoUrl ? draft.photoUrl : "");
       let photoUrl = draft.photoUrl;
 
       if (selectedPhotoFile) {
@@ -325,14 +347,18 @@ export default function PlayerManagerClient() {
         emergencyContactPhone: draft.emergencyContactPhone.trim(),
         medicalConditions: draft.medicalConditions.trim(),
         medications: draft.medications.trim(),
-        concussionDiagnosedPast24Months: draft.concussionDiagnosedPast24Months.trim(),
+        concussionDiagnosedPast24Months:
+          draft.concussionDiagnosedPast24Months.trim(),
         concussionDiagnosisDate: draft.concussionDiagnosisDate.trim(),
         allergies: draft.allergies.trim(),
-        registrationTimestamp: draft.registrationTimestamp || new Date().toISOString(),
+        registrationTimestamp:
+          draft.registrationTimestamp || new Date().toISOString(),
         college: draft.college.trim(),
         position: draft.position.trim(),
         secondaryPosition: draft.secondaryPosition.trim(),
-        jerseyNumber: draft.jerseyNumber.trim() ? Number(draft.jerseyNumber) : 0,
+        jerseyNumber: draft.jerseyNumber.trim()
+          ? Number(draft.jerseyNumber)
+          : 0,
         teamId: draft.teamId.trim(),
         bio: draft.bio.trim(),
         photoUrl,
@@ -385,7 +411,9 @@ export default function PlayerManagerClient() {
       }
       setStatus("Player deleted.");
     } catch (deleteError) {
-      setError(getFriendlyFirebaseError(deleteError, "Unable to delete player."));
+      setError(
+        getFriendlyFirebaseError(deleteError, "Unable to delete player."),
+      );
     }
   }
 
@@ -398,558 +426,758 @@ export default function PlayerManagerClient() {
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
 
-      <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard
-          title={selectedPlayerId ? "Edit Player" : "Add Player"}
-          kicker="Player Details"
-        >
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-            <p className="md:col-span-2 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-              Player information
-            </p>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                First name <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                value={draft.firstName}
-                onChange={(event) => setDraft((current) => ({ ...current, firstName: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Last name <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                value={draft.lastName}
-                onChange={(event) => setDraft((current) => ({ ...current, lastName: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Birthdate <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                value={draft.birthDate}
-                onChange={(event) => setDraft((current) => ({ ...current, birthDate: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                type="date"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Jersey number
-              <input
-                value={draft.jerseyNumber}
-                onChange={(event) => setDraft((current) => ({ ...current, jerseyNumber: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                inputMode="numeric"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              School
-              <input
-                value={draft.school}
-                onChange={(event) => setDraft((current) => ({ ...current, school: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Grade
-              <input
-                value={draft.grade}
-                onChange={(event) => setDraft((current) => ({ ...current, grade: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Height
-              <input
-                value={draft.height}
-                onChange={(event) => setDraft((current) => ({ ...current, height: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder={'5\'8"'}
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Shirt size
-              <input
-                value={draft.shirtSize}
-                onChange={(event) => setDraft((current) => ({ ...current, shirtSize: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              College
-              <input
-                value={draft.college}
-                onChange={(event) => setDraft((current) => ({ ...current, college: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Primary position
-              <input
-                value={draft.position}
-                onChange={(event) => setDraft((current) => ({ ...current, position: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Secondary position
-              <input
-                value={draft.secondaryPosition}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, secondaryPosition: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Team
-              <select
-                value={draft.teamId}
-                onChange={(event) => setDraft((current) => ({ ...current, teamId: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="">Select team</option>
-                {sortedTeams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Player email
-              <input
-                type="email"
-                value={draft.email}
-                onChange={(event) => setDraft((current) => ({ ...current, email: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Player phone number
-              <input
-                value={draft.phone}
-                onChange={(event) => setDraft((current) => ({ ...current, phone: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-              Guardian information
-            </p>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian first name
-              <input
-                value={draft.guardianFirstName}
-                onChange={(event) => setDraft((current) => ({ ...current, guardianFirstName: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian last name
-              <input
-                value={draft.guardianLastName}
-                onChange={(event) => setDraft((current) => ({ ...current, guardianLastName: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian email
-              <input
-                type="email"
-                value={draft.guardianEmail}
-                onChange={(event) => setDraft((current) => ({ ...current, guardianEmail: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian phone number
-              <input
-                value={draft.guardianPhone}
-                onChange={(event) => setDraft((current) => ({ ...current, guardianPhone: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm font-semibold text-[color:var(--ink)]">
-              <input
-                type="checkbox"
-                checked={draft.guardianAddressDifferent}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    guardianAddressDifferent: event.target.checked,
-                  }))
-                }
-              />
-              Guardian address is different than the player&apos;s address
-            </label>
-            {draft.guardianAddressDifferent && (
-              <>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Guardian street address
-                  <input
-                    value={draft.guardianAddressStreet}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, guardianAddressStreet: event.target.value }))
-                    }
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Guardian city
-                  <input
-                    value={draft.guardianAddressCity}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, guardianAddressCity: event.target.value }))
-                    }
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Guardian state
-                  <input
-                    value={draft.guardianAddressState}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, guardianAddressState: event.target.value }))
-                    }
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  />
-                </label>
-                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                  Guardian ZIP
-                  <input
-                    value={draft.guardianAddressZip}
-                    onChange={(event) =>
-                      setDraft((current) => ({ ...current, guardianAddressZip: event.target.value }))
-                    }
-                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  />
-                </label>
-              </>
-            )}
-            <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-              Guardian 2
-            </p>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian 2 first name
-              <input
-                value={draft.guardian2FirstName}
-                onChange={(event) => setDraft((current) => ({ ...current, guardian2FirstName: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian 2 last name
-              <input
-                value={draft.guardian2LastName}
-                onChange={(event) => setDraft((current) => ({ ...current, guardian2LastName: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian 2 phone
-              <input
-                value={draft.guardian2Phone}
-                onChange={(event) => setDraft((current) => ({ ...current, guardian2Phone: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Guardian 2 email
-              <input
-                type="email"
-                value={draft.guardian2Email}
-                onChange={(event) => setDraft((current) => ({ ...current, guardian2Email: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-              Player address
-            </p>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Street address
-              <input
-                value={draft.addressStreet}
-                onChange={(event) => setDraft((current) => ({ ...current, addressStreet: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              City
-              <input
-                value={draft.addressCity}
-                onChange={(event) => setDraft((current) => ({ ...current, addressCity: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              State
-              <input
-                value={draft.addressState}
-                onChange={(event) => setDraft((current) => ({ ...current, addressState: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              ZIP
-              <input
-                value={draft.addressZip}
-                onChange={(event) => setDraft((current) => ({ ...current, addressZip: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-              Emergency Contact / Medical Information
-            </p>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Emergency contact name
-              <input
-                value={draft.emergencyContactName}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, emergencyContactName: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Relationship to participant
-              <input
-                value={draft.emergencyContactRelationship}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, emergencyContactRelationship: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Emergency contact primary phone
-              <input
-                value={draft.emergencyContactPhone}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, emergencyContactPhone: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Concussion diagnosed in past 24 months?
-              <select
-                value={draft.concussionDiagnosedPast24Months}
-                onChange={(event) =>
-                  setDraft((current) => ({
-                    ...current,
-                    concussionDiagnosedPast24Months: event.target.value,
-                  }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="">Select one</option>
-                <option value="yes">Yes</option>
-                <option value="no">No</option>
-              </select>
-            </label>
-            {draft.concussionDiagnosedPast24Months === "yes" && (
+      <MatchedAdminColumns
+        left={
+          <SectionCard
+            title={selectedPlayerId ? "Edit Player" : "Add Player"}
+            kicker="Player Details"
+          >
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+              <p className="md:col-span-2 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                Player information
+              </p>
               <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-                Concussion diagnosis date (month/year)
+                <span>
+                  First name <span className="text-[#b42318]">*</span>
+                </span>
                 <input
-                  value={draft.concussionDiagnosisDate}
+                  value={draft.firstName}
                   onChange={(event) =>
-                    setDraft((current) => ({ ...current, concussionDiagnosisDate: event.target.value }))
+                    setDraft((current) => ({
+                      ...current,
+                      firstName: event.target.value,
+                    }))
                   }
                   className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                  placeholder="MM/YYYY"
                 />
               </label>
-            )}
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Medical conditions we should be aware of
-              <textarea
-                value={draft.medicalConditions}
-                onChange={(event) => setDraft((current) => ({ ...current, medicalConditions: event.target.value }))}
-                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Medications
-              <textarea
-                value={draft.medications}
-                onChange={(event) => setDraft((current) => ({ ...current, medications: event.target.value }))}
-                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Allergies
-              <textarea
-                value={draft.allergies}
-                onChange={(event) => setDraft((current) => ({ ...current, allergies: event.target.value }))}
-                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Bio
-              <textarea
-                value={draft.bio}
-                onChange={(event) => setDraft((current) => ({ ...current, bio: event.target.value }))}
-                className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Photo
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                onChange={(event) => {
-                  const file = event.target.files?.[0] ?? null;
-                  setSelectedPhotoFile(file);
-                  setSelectedPhotoName(file?.name ?? "");
-                }}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-              <span className="text-xs font-medium text-[color:var(--muted)]">
-                {selectedPhotoName
-                  ? `Selected: ${selectedPhotoName}`
-                  : draft.photoUrl
-                    ? "Current photo is saved. Choose a new file to replace it."
-                    : photoUrlToDelete
-                      ? "Photo will be removed when you save."
-                      : "Choose a player photo."}
-              </span>
-              {draft.photoUrl && (
-                <button
-                  type="button"
-                  onClick={removePhoto}
-                  className="w-fit rounded-full border border-[#e7b8b8] px-4 py-2 text-sm font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2]"
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Last name <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  value={draft.lastName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      lastName: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Birthdate <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  value={draft.birthDate}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      birthDate: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  type="date"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Jersey number
+                <input
+                  value={draft.jerseyNumber}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      jerseyNumber: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  inputMode="numeric"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                School
+                <input
+                  value={draft.school}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      school: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Grade
+                <input
+                  value={draft.grade}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      grade: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Height
+                <input
+                  value={draft.height}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      height: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder={"5'8\""}
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Shirt size
+                <input
+                  value={draft.shirtSize}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      shirtSize: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                College
+                <input
+                  value={draft.college}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      college: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Primary position
+                <input
+                  value={draft.position}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      position: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Secondary position
+                <input
+                  value={draft.secondaryPosition}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      secondaryPosition: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Team
+                <select
+                  value={draft.teamId}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      teamId: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                 >
-                  Remove photo
-                </button>
+                  <option value="">Select team</option>
+                  {sortedTeams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Player email
+                <input
+                  type="email"
+                  value={draft.email}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      email: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Player phone number
+                <input
+                  value={draft.phone}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      phone: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                Guardian information
+              </p>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian first name
+                <input
+                  value={draft.guardianFirstName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardianFirstName: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian last name
+                <input
+                  value={draft.guardianLastName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardianLastName: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian email
+                <input
+                  type="email"
+                  value={draft.guardianEmail}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardianEmail: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian phone number
+                <input
+                  value={draft.guardianPhone}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardianPhone: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm font-semibold text-[color:var(--ink)]">
+                <input
+                  type="checkbox"
+                  checked={draft.guardianAddressDifferent}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardianAddressDifferent: event.target.checked,
+                    }))
+                  }
+                />
+                Guardian address is different than the player&apos;s address
+              </label>
+              {draft.guardianAddressDifferent && (
+                <>
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Guardian street address
+                    <input
+                      value={draft.guardianAddressStreet}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          guardianAddressStreet: event.target.value,
+                        }))
+                      }
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Guardian city
+                    <input
+                      value={draft.guardianAddressCity}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          guardianAddressCity: event.target.value,
+                        }))
+                      }
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Guardian state
+                    <input
+                      value={draft.guardianAddressState}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          guardianAddressState: event.target.value,
+                        }))
+                      }
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                    Guardian ZIP
+                    <input
+                      value={draft.guardianAddressZip}
+                      onChange={(event) =>
+                        setDraft((current) => ({
+                          ...current,
+                          guardianAddressZip: event.target.value,
+                        }))
+                      }
+                      className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    />
+                  </label>
+                </>
               )}
-            </label>
-            <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
-              <input
-                type="checkbox"
-                checked={draft.active}
-                onChange={(event) => setDraft((current) => ({ ...current, active: event.target.checked }))}
-              />
-              Active player
-            </label>
-            <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
-              <input
-                type="checkbox"
-                checked={draft.isAlumni}
-                onChange={(event) => setDraft((current) => ({ ...current, isAlumni: event.target.checked }))}
-              />
-              Alumni player
-            </label>
-            <div className="md:col-span-2 flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? "Saving..." : selectedPlayerId ? "Save Changes" : "Add Player"}
-              </button>
-              {selectedPlayerId && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+              <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                Guardian 2
+              </p>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian 2 first name
+                <input
+                  value={draft.guardian2FirstName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardian2FirstName: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian 2 last name
+                <input
+                  value={draft.guardian2LastName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardian2LastName: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian 2 phone
+                <input
+                  value={draft.guardian2Phone}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardian2Phone: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Guardian 2 email
+                <input
+                  type="email"
+                  value={draft.guardian2Email}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      guardian2Email: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                Player address
+              </p>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Street address
+                <input
+                  value={draft.addressStreet}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      addressStreet: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                City
+                <input
+                  value={draft.addressCity}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      addressCity: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                State
+                <input
+                  value={draft.addressState}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      addressState: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                ZIP
+                <input
+                  value={draft.addressZip}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      addressZip: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <p className="md:col-span-2 mt-2 border-t border-[color:var(--line)] pt-4 text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                Emergency Contact / Medical Information
+              </p>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Emergency contact name
+                <input
+                  value={draft.emergencyContactName}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      emergencyContactName: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Relationship to participant
+                <input
+                  value={draft.emergencyContactRelationship}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      emergencyContactRelationship: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Emergency contact primary phone
+                <input
+                  value={draft.emergencyContactPhone}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      emergencyContactPhone: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Concussion diagnosed in past 24 months?
+                <select
+                  value={draft.concussionDiagnosedPast24Months}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      concussionDiagnosedPast24Months: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                 >
-                  Cancel Edit
-                </button>
+                  <option value="">Select one</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </label>
+              {draft.concussionDiagnosedPast24Months === "yes" && (
+                <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                  Concussion diagnosis date (month/year)
+                  <input
+                    value={draft.concussionDiagnosisDate}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        concussionDiagnosisDate: event.target.value,
+                      }))
+                    }
+                    className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                    placeholder="MM/YYYY"
+                  />
+                </label>
               )}
-              {status && <span className="text-sm text-[color:var(--muted)]">{status}</span>}
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Medical conditions we should be aware of
+                <textarea
+                  value={draft.medicalConditions}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      medicalConditions: event.target.value,
+                    }))
+                  }
+                  className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Medications
+                <textarea
+                  value={draft.medications}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      medications: event.target.value,
+                    }))
+                  }
+                  className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Allergies
+                <textarea
+                  value={draft.allergies}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      allergies: event.target.value,
+                    }))
+                  }
+                  className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Bio
+                <textarea
+                  value={draft.bio}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      bio: event.target.value,
+                    }))
+                  }
+                  className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Photo
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] ?? null;
+                    setSelectedPhotoFile(file);
+                    setSelectedPhotoName(file?.name ?? "");
+                  }}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+                <span className="text-xs font-medium text-[color:var(--muted)]">
+                  {selectedPhotoName
+                    ? `Selected: ${selectedPhotoName}`
+                    : draft.photoUrl
+                      ? "Current photo is saved. Choose a new file to replace it."
+                      : photoUrlToDelete
+                        ? "Photo will be removed when you save."
+                        : "Choose a player photo."}
+                </span>
+                {draft.photoUrl && (
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="w-fit rounded-full border border-[#e7b8b8] px-4 py-2 text-sm font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2]"
+                  >
+                    Remove photo
+                  </button>
+                )}
+              </label>
+              <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={draft.active}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      active: event.target.checked,
+                    }))
+                  }
+                />
+                Active player
+              </label>
+              <label className="flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={draft.isAlumni}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      isAlumni: event.target.checked,
+                    }))
+                  }
+                />
+                Alumni player
+              </label>
+              <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving
+                    ? "Saving..."
+                    : selectedPlayerId
+                      ? "Save Changes"
+                      : "Add Player"}
+                </button>
+                {selectedPlayerId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                {status && (
+                  <span className="text-sm text-[color:var(--muted)]">
+                    {status}
+                  </span>
+                )}
+              </div>
+              {error && (
+                <div className="md:col-span-2 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
+                  {error}
+                </div>
+              )}
+            </form>
+          </SectionCard>
+        }
+        right={
+          <SectionCard title="Current Players" kicker="Roster Records">
+            <div className="mb-4">
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Search players
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Search by name, team, position, school, college, or birthdate"
+                />
+              </label>
             </div>
-            {error && (
-              <div className="md:col-span-2 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
-                {error}
-              </div>
-            )}
-          </form>
-        </SectionCard>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+              {(players.loading || teams.loading) && (
+                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  Loading players...
+                </div>
+              )}
+              {!(players.loading || teams.loading) &&
+                filteredPlayers.length === 0 && (
+                  <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                    No players match the current search.
+                  </div>
+                )}
+              {filteredPlayers.map((player) => {
+                const team = teams.data.find(
+                  (entry) => entry.id === player.teamId,
+                );
 
-        <SectionCard title="Current Players" kicker="Roster Records">
-          <div className="mb-4">
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Search players
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Search by name, team, position, school, college, or birthdate"
-              />
-            </label>
-          </div>
-          <div className="max-h-[42rem] space-y-3 overflow-y-auto pr-2">
-            {(players.loading || teams.loading) && (
-              <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                Loading players...
-              </div>
-            )}
-            {!(players.loading || teams.loading) && filteredPlayers.length === 0 && (
-              <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                No players match the current search.
-              </div>
-            )}
-            {filteredPlayers.map((player) => {
-              const team = teams.data.find((entry) => entry.id === player.teamId);
-
-              return (
-                <div
-                  key={player.id}
-                  className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-lg font-bold text-[color:var(--ink)]">
-                        {player.firstName} {player.lastName}
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        #{player.jerseyNumber} · {player.position} · {player.school || "School coming soon"}
-                      </p>
-                      {player.isAlumni === true && (
-                        <p className="text-sm text-[color:var(--muted)]">
-                          Alumni{player.college ? ` · ${player.college}` : ""}
+                return (
+                  <div
+                    key={player.id}
+                    className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-lg font-bold text-[color:var(--ink)]">
+                          {player.firstName} {player.lastName}
                         </p>
-                      )}
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Team: {team?.name ?? player.teamId}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        onClick={() => beginEdit(player)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(player.id)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        Delete
-                      </button>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          #{player.jerseyNumber} · {player.position} ·{" "}
+                          {player.school || "School coming soon"}
+                        </p>
+                        {player.isAlumni === true && (
+                          <p className="text-sm text-[color:var(--muted)]">
+                            Alumni{player.college ? ` · ${player.college}` : ""}
+                          </p>
+                        )}
+                        <p className="text-sm text-[color:var(--muted)]">
+                          Team: {team?.name ?? player.teamId}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="button"
+                          onClick={() => beginEdit(player)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(player.id)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-6 text-sm text-[color:var(--muted)]">
-            Need to manage team assignments first?{" "}
-            <Link href="/admin/dashboard" className="font-semibold text-[color:var(--ink)]">
-              Return to the admin dashboard
-            </Link>
-            .
-          </div>
-        </SectionCard>
-      </div>
+                );
+              })}
+            </div>
+            <div className="mt-6 text-sm text-[color:var(--muted)]">
+              Need to manage team assignments first?{" "}
+              <Link
+                href="/admin/dashboard"
+                className="font-semibold text-[color:var(--ink)]"
+              >
+                Return to the admin dashboard
+              </Link>
+              .
+            </div>
+          </SectionCard>
+        }
+      />
     </>
   );
 }

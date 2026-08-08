@@ -11,6 +11,9 @@ export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
   const access = useAuthSession();
+  const showAdminLink =
+    access.authUser?.profile?.active !== false &&
+    access.authUser?.profile?.role === "admin";
   const initials = access.authUser?.profile
     ? `${access.authUser.profile.firstName?.[0] ?? ""}${access.authUser.profile.lastName?.[0] ?? ""}`.toUpperCase()
     : "U";
@@ -92,6 +95,14 @@ export default function SiteHeader() {
                 {item.label}
               </Link>
             ))}
+            {showAdminLink && (
+              <Link
+                href="/admin/dashboard"
+                className="rounded-full px-4 py-2 transition hover:bg-[color:var(--accent-soft)] hover:text-[color:var(--ink)]"
+              >
+                Admin
+              </Link>
+            )}
           </nav>
 
           {access.authUser && (
@@ -117,6 +128,15 @@ export default function SiteHeader() {
                 {item.label}
               </Link>
             ))}
+            {showAdminLink && (
+              <Link
+                href="/admin/dashboard"
+                className="rounded-2xl px-4 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                onClick={() => setMenuOpen(false)}
+              >
+                Admin
+              </Link>
+            )}
             {access.authUser && (
               <Link
                 href="/profile"

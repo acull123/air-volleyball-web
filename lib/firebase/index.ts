@@ -3,6 +3,7 @@ export * from "./api";
 export * from "./client";
 export * from "./collections";
 export * from "./errors";
+export * from "./functions";
 export * from "./hooks";
 export * from "./live";
 export * from "./schema";

@@ -20,8 +20,7 @@ export const siteNav: NavLink[] = [
   { href: "/training", label: "Training" },
   { href: "/register", label: "Register" },
   { href: "/forms", label: "Forms" },
-  { href: "/login", label: "Player Portal" },
-  { href: "/admin", label: "Admin" },
+  { href: "/login", label: "Portal" },
 ];
 
 export const players: Player[] = [

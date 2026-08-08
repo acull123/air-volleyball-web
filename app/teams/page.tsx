@@ -139,6 +139,12 @@ export default function TeamsPage() {
                     >
                       View roster
                     </Link>
+                    <Link
+                      href={`/team-tournaments?team=${team.id}`}
+                      className="inline-flex rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] hover:!text-white"
+                    >
+                      Tournaments
+                    </Link>
                   </div>
                 </article>
               );

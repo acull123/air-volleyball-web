@@ -5,6 +5,7 @@ import ClubCalendar from "@/app/components/ClubCalendar";
 import SectionCard from "@/app/components/SectionCard";
 import { getEventTeamSchedules } from "@/lib/event-teams";
 import { useFirestoreCollection } from "@/lib/firebase";
+import { formatTournamentEventLabel, isTournamentEventType } from "@/lib/tournament-events";
 import type { EventDocument } from "@/lib/firebase/schema";
 
 function getDateKeysForEvent(event: EventDocument) {
@@ -83,7 +84,7 @@ export default function WhereWeAreDashboardClient() {
     () =>
       events.data
         .filter((event) => event.active !== false)
-        .filter((event) => event.type === "tournament" || event.type === "twoDayTournament"),
+        .filter((event) => isTournamentEventType(event.type)),
     [events.data],
   );
   const selectedTournaments = useMemo(
@@ -167,7 +168,7 @@ export default function WhereWeAreDashboardClient() {
                           </p>
                         </div>
                         <span className="w-fit rounded-full bg-[#eaf2ff] px-3 py-1 text-xs font-bold text-[#1d4f91]">
-                          {event.type === "twoDayTournament" ? "2 day tournament" : "Tournament"}
+                          {formatTournamentEventLabel(event)}
                         </span>
                       </div>
                       <div className="mt-4">

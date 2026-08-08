@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { where } from "firebase/firestore";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import PageHero from "../components/PageHero";
 import ScheduleTable from "../components/ScheduleTable";
 import SectionCard from "../components/SectionCard";
@@ -11,14 +13,14 @@ import { createPortalAccount, sendPasswordReset, signInUser, useAuthSession } fr
 import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
 import { compareAthletesByName, comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
-import type { ConflictDocument, InvoiceDocument, RegistrationDocument } from "@/lib/firebase/schema";
+import type { CoachDocument, ConflictDocument, InvoiceDocument, RegistrationDocument } from "@/lib/firebase/schema";
 import type { Event } from "../types/models";
 
 type PortalMode = "signin" | "create" | "reset";
 type AccountRole = "parent" | "player" | "unverifiedCoach";
 
 const portalHighlights = [
-  "Link one or more players to your account when you create it.",
+  "Create an account now, then link or create player profiles whenever you are ready.",
   "Register your linked players for camps, tryouts, and other open events.",
   "See season events tied to your players and their teams.",
   "Use the same account later for balances, schedules, and club updates.",
@@ -32,6 +34,9 @@ const portalInteractiveCardClass =
 
 const portalSelectedCardClass =
   "group rounded-[1.5rem] border border-transparent bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)] px-5 py-5 shadow-[0_12px_30px_rgba(17,58,98,0.12)] transition cursor-pointer";
+
+const portalCoachToolCardClass =
+  "group rounded-[1.75rem] border border-[color:var(--line)] !border-[#b8dcff] bg-[color:var(--paper)] px-5 py-5 transition hover:!border-transparent hover:bg-[radial-gradient(circle_at_top_left,rgba(255,186,84,0.2),transparent_28%),radial-gradient(circle_at_85%_20%,rgba(132,181,255,0.22),transparent_24%),linear-gradient(135deg,rgb(29,103,205)_0%,#1b5cc2_38%,#123f8d_72%,#0b2857_100%)]";
 
 function formatEventType(type: string): Event["eventType"] {
   if (type === "tryout") {
@@ -95,6 +100,16 @@ function isCurrentOrFutureEvent(event: { startDate: string; endDate?: string }) 
   const eventEndDate = event.endDate || event.startDate;
 
   return !eventEndDate || eventEndDate >= todayKey;
+}
+
+function getCoachTeamIds(coach: CoachDocument): string[] {
+  if (Array.isArray((coach as CoachDocument & { teamIds?: string[] }).teamIds)) {
+    return (coach as CoachDocument & { teamIds?: string[] }).teamIds.filter(Boolean);
+  }
+
+  const legacyTeamId = (coach as CoachDocument & { teamId?: string }).teamId;
+
+  return legacyTeamId ? [legacyTeamId] : [];
 }
 
 function formatConflictDateTime(value: string) {
@@ -374,12 +389,21 @@ function useInvoicesByPlayerIds(playerIds: string[]) {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const access = useAuthSession();
   const [linkedPlayerIdsOverride, setLinkedPlayerIdsOverride] = useState<{
     userId: string;
     playerIds: string[];
   } | null>(null);
   const authUserId = access.authUser?.firebaseUser.uid ?? "";
+  const userRole = access.authUser?.profile?.role ?? null;
+  const isCoachPortalUser =
+    access.authUser?.profile?.active !== false && userRole === "coach";
+  const signedInEmail = (
+    access.authUser?.profile?.email ||
+    access.authUser?.firebaseUser.email ||
+    ""
+  ).trim().toLowerCase();
   const profileLinkedPlayerIds = useMemo(
     () => access.authUser?.profile?.playerIds ?? [],
     [access.authUser?.profile?.playerIds],
@@ -388,6 +412,9 @@ export default function LoginPage() {
     linkedPlayerIdsOverride?.userId === authUserId ? linkedPlayerIdsOverride.playerIds : profileLinkedPlayerIds;
   const players = useFirestoreCollection("players");
   const teams = useFirestoreCollection("teams");
+  const coaches = useFirestoreCollection("coaches", {
+    enabled: isCoachPortalUser,
+  });
   const events = useFirestoreCollection("events");
   const registrations = useRegistrationsByPlayerIds(linkedPlayerIds);
   const invoices = useInvoicesByPlayerIds(linkedPlayerIds);
@@ -423,12 +450,28 @@ export default function LoginPage() {
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [submittingConflict, setSubmittingConflict] = useState(false);
   const [savingLinkedPlayers, setSavingLinkedPlayers] = useState(false);
+  const [unregisteringRegistrationId, setUnregisteringRegistrationId] = useState<string | null>(null);
+  const [redirectAfterSignIn, setRedirectAfterSignIn] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [linkedPlayerStatus, setLinkedPlayerStatus] = useState<string | null>(null);
   const [linkedPlayerError, setLinkedPlayerError] = useState<string | null>(null);
+  const [registrationStatus, setRegistrationStatus] = useState<string | null>(null);
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [conflictStatus, setConflictStatus] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const profile = access.authUser?.profile;
+
+    if (!redirectAfterSignIn || access.loading) {
+      return;
+    }
+
+    if (profile?.active !== false && profile?.role === "admin") {
+      router.replace("/admin/dashboard");
+    }
+  }, [access.authUser?.profile, access.loading, redirectAfterSignIn, router]);
 
   const filteredPlayers = useMemo(() => {
     const normalizedSearch = playerSearchTerm.trim().toLowerCase();
@@ -457,7 +500,38 @@ export default function LoginPage() {
         .sort(comparePlayersByName),
     [linkedPlayerIds, players.data],
   );
-  const linkedTeamIds = Array.from(new Set(linkedPlayers.map((player) => player.teamId).filter(Boolean)));
+  const currentCoach = useMemo(() => {
+    if (!isCoachPortalUser) {
+      return null;
+    }
+
+    const profileCoachId = access.authUser?.profile?.coachId ?? "";
+
+    if (profileCoachId) {
+      return coaches.data.find((coach) => coach.id === profileCoachId) ?? null;
+    }
+
+    if (!signedInEmail) {
+      return null;
+    }
+
+    return coaches.data.find((coach) => coach.email.trim().toLowerCase() === signedInEmail) ?? null;
+  }, [access.authUser?.profile?.coachId, coaches.data, isCoachPortalUser, signedInEmail]);
+  const linkedTeamIds = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...linkedPlayers.map((player) => player.teamId).filter(Boolean),
+          ...(currentCoach ? getCoachTeamIds(currentCoach) : []),
+          ...(currentCoach
+            ? teams.data
+                .filter((team) => (team.coachIds ?? []).includes(currentCoach.id))
+                .map((team) => team.id)
+            : []),
+        ]),
+      ),
+    [currentCoach, linkedPlayers, teams.data],
+  );
   const linkedTeams = teams.data.filter((team) => linkedTeamIds.includes(team.id));
   const effectiveConflictPlayerId =
     linkedPlayers.some((player) => player.id === conflictPlayerId)
@@ -523,6 +597,10 @@ export default function LoginPage() {
       registrations.data
         .filter((registration) => (registration.eventPrice ?? 0) > 0)
         .sort((left, right) => left.eventTitle.localeCompare(right.eventTitle)),
+    [registrations.data],
+  );
+  const eventRegistrations = useMemo(
+    () => [...registrations.data].sort((left, right) => left.eventTitle.localeCompare(right.eventTitle)),
     [registrations.data],
   );
   const teamPaymentInvoices = useMemo(
@@ -604,6 +682,31 @@ export default function LoginPage() {
     void updateLinkedPlayerIds(linkedPlayerIds.filter((id) => id !== playerId));
   }
 
+  async function unregisterForEvent(registration: RegistrationDocument) {
+    const playerName = getLinkedPlayerName(
+      registration.playerId,
+      `${registration.athleteFirstName} ${registration.athleteLastName}`.trim() || "this player",
+    );
+    const confirmed = window.confirm(`Unregister ${playerName} from ${registration.eventTitle}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setUnregisteringRegistrationId(registration.id);
+    setRegistrationStatus(null);
+    setRegistrationError(null);
+
+    try {
+      await firestoreApi.registrations.remove(registration.id);
+      setRegistrationStatus(`${playerName} was unregistered from ${registration.eventTitle}.`);
+    } catch (submitError) {
+      setRegistrationError(getFriendlyFirebaseError(submitError, "Unable to unregister for this event."));
+    } finally {
+      setUnregisteringRegistrationId(null);
+    }
+  }
+
   async function handleSignIn(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
@@ -612,6 +715,7 @@ export default function LoginPage() {
 
     try {
       await signInUser(signInEmail.trim(), signInPassword);
+      setRedirectAfterSignIn(true);
       setStatus("Signed in.");
     } catch (submitError) {
       setError(getFriendlyFirebaseError(submitError, "Unable to sign in."));
@@ -658,13 +762,8 @@ export default function LoginPage() {
       return;
     }
 
-    if (createRole !== "unverifiedCoach" && selectedPlayerIds.length === 0) {
-      setError("Select at least one player for this account.");
-      return;
-    }
-
-    if (createRole === "player" && selectedPlayerIds.length !== 1) {
-      setError("Player accounts must be linked to one player.");
+    if (createRole === "player" && selectedPlayerIds.length > 1) {
+      setError("Player accounts can only be linked to one player.");
       return;
     }
 
@@ -751,18 +850,35 @@ export default function LoginPage() {
     }
   }
 
+  const portalActions = [{ href: "/profile", label: "Edit Profile" }];
+
+  if (access.loading) {
+    return (
+      <>
+        <PageHero
+          eyebrow="Portal"
+          title="Loading Portal"
+          description="Checking your signed-in account."
+        />
+        <SectionCard title="Loading" kicker="Account Access">
+          <p className="text-sm leading-7 text-[color:var(--muted)]">Loading your portal...</p>
+        </SectionCard>
+      </>
+    );
+  }
+
   if (access.authUser) {
     return (
       <>
         <PageHero
-          eyebrow="Player Portal"
+          eyebrow="Portal"
           title="Your Portal"
-          description="Your account is connected to the players you selected, so the portal can show the schedule and account information that matters to your family."
-          actions={[{ href: "/profile", label: "Edit Profile" }]}
+          description="Manage linked players, registrations, payments, schedules, and conflicts from your Air Volleyball account."
+          actions={portalActions}
         />
 
         <div className="flex flex-col gap-8">
-          <div className="order-2">
+          <div className="order-3">
             <SectionCard title="Linked Players" kicker="Your Account">
             {linkedPlayers.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-[color:var(--line)] px-6 py-10 text-center text-sm text-[color:var(--muted)]">
@@ -861,7 +977,7 @@ export default function LoginPage() {
             </SectionCard>
           </div>
 
-          <div className="order-1">
+          <div className="order-2">
             <SectionCard title="Portal Overview" kicker="Season Tools">
             <div className="grid gap-5 xl:grid-cols-[0.7fr_1.3fr]">
               <div className="space-y-4">
@@ -880,6 +996,52 @@ export default function LoginPage() {
                       ))
                     )}
                   </div>
+                </div>
+
+                <div className={portalStaticCardClass}>
+                  <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                    Event Registrations
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    {registrations.loading ? (
+                      <p className="text-sm text-[color:var(--muted)]">Loading registrations...</p>
+                    ) : registrations.error ? (
+                      <p className="text-sm text-[color:var(--muted)]">Registrations are unavailable right now.</p>
+                    ) : eventRegistrations.length === 0 ? (
+                      <p className="text-sm text-[color:var(--muted)]">No event registrations are linked yet.</p>
+                    ) : (
+                      eventRegistrations.map((registration) => {
+                        const playerName = getLinkedPlayerName(
+                          registration.playerId,
+                          `${registration.athleteFirstName} ${registration.athleteLastName}`.trim() || "Linked player",
+                        );
+
+                        return (
+                          <div key={registration.id} className="rounded-2xl bg-[color:var(--paper)] px-4 py-4">
+                            <p className="font-semibold text-[color:var(--ink)]">{registration.eventTitle}</p>
+                            <p className="mt-1 text-sm text-[color:var(--muted)]">
+                              {playerName} · {registration.status}
+                              {(registration.eventPrice ?? 0) > 0 ? ` · ${registration.paymentStatus}` : ""}
+                            </p>
+                            <button
+                              type="button"
+                              disabled={unregisteringRegistrationId === registration.id}
+                              onClick={() => void unregisterForEvent(registration)}
+                              className="mt-3 rounded-full border border-[#e7b8b8] px-4 py-2 text-sm font-semibold text-[#8a2d2d] transition hover:bg-[#fff2f2] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {unregisteringRegistrationId === registration.id ? "Unregistering..." : "Unregister"}
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  {registrationStatus && <p className="mt-4 text-sm text-[color:var(--muted)]">{registrationStatus}</p>}
+                  {registrationError && (
+                    <div className="mt-4 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
+                      {registrationError}
+                    </div>
+                  )}
                 </div>
 
                 <div className={portalStaticCardClass}>
@@ -950,6 +1112,51 @@ export default function LoginPage() {
             </div>
             </SectionCard>
           </div>
+
+          {isCoachPortalUser && (
+            <div className="order-1">
+              <SectionCard title="Coach Tools" kicker="Coach Actions">
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <Link
+                    href="/admin/finances/expense-reports"
+                    className={portalCoachToolCardClass}
+                  >
+                    <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">
+                      Submit Expense Report
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                      Submit coach expenses and review the status of your reports.
+                    </p>
+                  </Link>
+                  <Link
+                    href="/admin/conflicts"
+                    className={portalCoachToolCardClass}
+                  >
+                    <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">
+                      Manage Player Conflicts
+                    </h2>
+                    <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                      Review blocked times submitted by players and families.
+                    </p>
+                  </Link>
+                  {linkedTeams.map((team) => (
+                    <Link
+                      key={team.id}
+                      href={`/team-schedule?team=${team.id}`}
+                      className={portalCoachToolCardClass}
+                    >
+                      <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">
+                        {team.name} Schedule
+                      </h2>
+                      <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+                        Open the team schedule for practices, tournaments, and published events.
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              </SectionCard>
+            </div>
+          )}
         </div>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
@@ -1077,9 +1284,9 @@ export default function LoginPage() {
   return (
     <>
       <PageHero
-        eyebrow="Player Portal"
-        title="Parents And Players Login"
-        description="Sign in to your portal account or create a new one and connect it to the players you want this account to follow."
+        eyebrow="Portal"
+        title="Portal Login"
+        description="Sign in to your account or create a new one. You can link or create player profiles after the account is ready."
         actions={[
           { href: "/register", label: "Register For An Event" },
           { href: "/teams", label: "View Team Info", variant: "secondary" },
@@ -1088,7 +1295,7 @@ export default function LoginPage() {
 
       <div className="grid gap-8 lg:grid-cols-[0.92fr_1.08fr]">
         <SectionCard
-          title={mode === "signin" ? "Portal Login" : mode === "reset" ? "Reset Password" : "Create Account"}
+          title={mode === "signin" ? "Login" : mode === "reset" ? "Reset Password" : "Create Account"}
           kicker="Account Access"
         >
           {mode === "signin" ? (
@@ -1269,8 +1476,8 @@ export default function LoginPage() {
                   </label>
                   <div className="rounded-[1.5rem] bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
                     {createRole === "parent"
-                      ? "Choose one or more players for this account."
-                      : "Choose the player profile for this account."}
+                      ? "Optionally choose one or more players now. You can also link or create players later from the portal."
+                      : "Optionally choose the player profile now. You can also link or create a player later from the portal."}
                   </div>
                   <div className="max-h-[26rem] space-y-3 overflow-y-auto pr-2">
                     {players.loading || teams.loading ? (

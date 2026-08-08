@@ -26,7 +26,7 @@ export default function StaffAccessGate({
 
   useEffect(() => {
     if (!access.loading && !hasAnyRole(access.authUser?.profile ?? null, ["admin", "coach"])) {
-      router.replace("/admin");
+      router.replace("/login");
     }
   }, [access.authUser?.profile, access.loading, router]);
 

@@ -40,5 +40,9 @@ export function getFriendlyFirebaseError(error: unknown, fallback: string) {
     return "That record could not be found.";
   }
 
+  if (!code && error instanceof Error && error.message) {
+    return error.message;
+  }
+
   return fallback;
 }

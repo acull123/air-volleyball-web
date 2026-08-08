@@ -5,11 +5,22 @@ import Link from "next/link";
 import { Timestamp } from "firebase/firestore";
 import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
-import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
+import MatchedAdminColumns from "@/app/admin/components/MatchedAdminColumns";
+import {
+  backfillTeamChatRooms,
+  firestoreApi,
+  useFirestoreCollection,
+  getFriendlyFirebaseError,
+} from "@/lib/firebase";
 import { getEventTeamSchedules } from "@/lib/event-teams";
 import { comparePlayersByName } from "@/lib/player-name";
 import { isCurrentPlayer } from "@/lib/player-status";
-import type { CoachDocument, InvoiceDocument, InvoiceStatus, TeamDocument } from "@/lib/firebase/schema";
+import type {
+  CoachDocument,
+  InvoiceDocument,
+  InvoiceStatus,
+  TeamDocument,
+} from "@/lib/firebase/schema";
 
 type TeamDraft = {
   name: string;
@@ -41,11 +52,13 @@ function mapTeamToDraft(team: TeamDocument): TeamDraft {
     season: team.season,
     ageGroup: team.ageGroup,
     expectedPlayersPerTeam:
-      team.expectedPlayersPerTeam === undefined || team.expectedPlayersPerTeam === null
+      team.expectedPlayersPerTeam === undefined ||
+      team.expectedPlayersPerTeam === null
         ? ""
         : String(team.expectedPlayersPerTeam),
     expectedTournamentCount:
-      team.expectedTournamentCount === undefined || team.expectedTournamentCount === null
+      team.expectedTournamentCount === undefined ||
+      team.expectedTournamentCount === null
         ? ""
         : String(team.expectedTournamentCount),
     description: team.description,
@@ -56,8 +69,12 @@ function mapTeamToDraft(team: TeamDocument): TeamDraft {
 }
 
 function getCoachTeamIds(coach: CoachDocument): string[] {
-  if (Array.isArray((coach as CoachDocument & { teamIds?: string[] }).teamIds)) {
-    return (coach as CoachDocument & { teamIds?: string[] }).teamIds.filter(Boolean);
+  if (
+    Array.isArray((coach as CoachDocument & { teamIds?: string[] }).teamIds)
+  ) {
+    return (coach as CoachDocument & { teamIds?: string[] }).teamIds.filter(
+      Boolean,
+    );
   }
 
   const legacyTeamId = (coach as CoachDocument & { teamId?: string }).teamId;
@@ -98,7 +115,10 @@ export default function TeamManagerClient() {
   const [selectedPhotoName, setSelectedPhotoName] = useState("");
   const [saving, setSaving] = useState(false);
   const [clearingTeamId, setClearingTeamId] = useState<string | null>(null);
-  const [updatingPaymentKey, setUpdatingPaymentKey] = useState<string | null>(null);
+  const [updatingPaymentKey, setUpdatingPaymentKey] = useState<string | null>(
+    null,
+  );
+  const [backfillingChatRooms, setBackfillingChatRooms] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -144,7 +164,9 @@ export default function TeamManagerClient() {
   const sortedCoaches = useMemo(
     () =>
       [...coaches.data].sort((a, b) =>
-        `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`),
+        `${a.lastName} ${a.firstName}`.localeCompare(
+          `${b.lastName} ${b.firstName}`,
+        ),
       ),
     [coaches.data],
   );
@@ -157,7 +179,8 @@ export default function TeamManagerClient() {
     }
 
     return sortedPlayers.filter((player) => {
-      const assignedTeam = teams.data.find((team) => team.id === player.teamId)?.name ?? "";
+      const assignedTeam =
+        teams.data.find((team) => team.id === player.teamId)?.name ?? "";
 
       return [player.firstName, player.lastName, player.position, assignedTeam]
         .join(" ")
@@ -175,7 +198,9 @@ export default function TeamManagerClient() {
 
     return sortedCoaches.filter((coach) => {
       const assignedTeams = getCoachTeamIds(coach)
-        .map((teamId) => teams.data.find((team) => team.id === teamId)?.name ?? "")
+        .map(
+          (teamId) => teams.data.find((team) => team.id === teamId)?.name ?? "",
+        )
         .join(" ");
 
       return [coach.firstName, coach.lastName, coach.title, assignedTeams]
@@ -235,10 +260,38 @@ export default function TeamManagerClient() {
         throw new Error("Team expectation settings must be valid numbers.");
       }
 
-      const teamId = selectedTeamId ?? (await firestoreApi.teams.create(basePayload));
+      const teamId =
+        selectedTeamId ?? (await firestoreApi.teams.create(basePayload));
 
       if (selectedTeamId) {
         await firestoreApi.teams.update(teamId, basePayload);
+      }
+
+      const teamChatRoomId = `team_${teamId}`;
+      const existingTeamChatRoom =
+        await firestoreApi.chatRooms.getById(teamChatRoomId);
+
+      if (existingTeamChatRoom) {
+        await firestoreApi.chatRooms.update(teamChatRoomId, {
+          type: "team",
+          title: basePayload.name,
+          teamId,
+          participantPlayerIds: basePayload.playerIds,
+          active: basePayload.active,
+        });
+      } else {
+        await firestoreApi.chatRooms.create({
+          id: teamChatRoomId,
+          type: "team",
+          title: basePayload.name,
+          teamId,
+          participantUserIds: [],
+          participantPlayerIds: basePayload.playerIds,
+          lastMessageText: "",
+          lastMessageSenderId: "",
+          lastMessageAt: null,
+          active: basePayload.active,
+        });
       }
 
       const nextPlayerTeamById = Object.fromEntries(
@@ -246,7 +299,9 @@ export default function TeamManagerClient() {
       );
 
       for (const player of players.data) {
-        const isAssignedToCurrentTeam = basePayload.playerIds.includes(player.id);
+        const isAssignedToCurrentTeam = basePayload.playerIds.includes(
+          player.id,
+        );
 
         if (isAssignedToCurrentTeam) {
           nextPlayerTeamById[player.id] = teamId;
@@ -257,7 +312,11 @@ export default function TeamManagerClient() {
 
       const playerUpdates = players.data
         .filter((player) => nextPlayerTeamById[player.id] !== player.teamId)
-        .map((player) => firestoreApi.players.update(player.id, { teamId: nextPlayerTeamById[player.id] }));
+        .map((player) =>
+          firestoreApi.players.update(player.id, {
+            teamId: nextPlayerTeamById[player.id],
+          }),
+        );
 
       const nextCoachTeamIdsById = Object.fromEntries(
         coaches.data.map((coach) => [coach.id, getCoachTeamIds(coach)]),
@@ -273,8 +332,18 @@ export default function TeamManagerClient() {
       }
 
       const coachUpdates = coaches.data
-        .filter((coach) => !areIdListsEqual(nextCoachTeamIdsById[coach.id], getCoachTeamIds(coach)))
-        .map((coach) => firestoreApi.coaches.update(coach.id, { teamIds: nextCoachTeamIdsById[coach.id] }));
+        .filter(
+          (coach) =>
+            !areIdListsEqual(
+              nextCoachTeamIdsById[coach.id],
+              getCoachTeamIds(coach),
+            ),
+        )
+        .map((coach) =>
+          firestoreApi.coaches.update(coach.id, {
+            teamIds: nextCoachTeamIdsById[coach.id],
+          }),
+        );
 
       await Promise.all([...playerUpdates, ...coachUpdates]);
 
@@ -323,7 +392,11 @@ export default function TeamManagerClient() {
         });
       });
 
-      await Promise.all(teamUpdates.filter((update): update is Promise<void> => update !== null));
+      await Promise.all(
+        teamUpdates.filter(
+          (update): update is Promise<void> => update !== null,
+        ),
+      );
 
       setStatus(selectedTeamId ? "Team updated." : "Team created.");
       resetForm();
@@ -347,7 +420,9 @@ export default function TeamManagerClient() {
     try {
       const playerUpdates = players.data
         .filter((player) => player.teamId === teamId)
-        .map((player) => firestoreApi.players.update(player.id, { teamId: "" }));
+        .map((player) =>
+          firestoreApi.players.update(player.id, { teamId: "" }),
+        );
 
       const coachUpdates = coaches.data
         .filter((coach) => getCoachTeamIds(coach).includes(teamId))
@@ -385,25 +460,41 @@ export default function TeamManagerClient() {
 
     try {
       const playerUpdates = players.data
-        .filter((player) => player.teamId === team.id || (team.playerIds ?? []).includes(player.id))
-        .map((player) => firestoreApi.players.update(player.id, { teamId: "" }));
+        .filter(
+          (player) =>
+            player.teamId === team.id ||
+            (team.playerIds ?? []).includes(player.id),
+        )
+        .map((player) =>
+          firestoreApi.players.update(player.id, { teamId: "" }),
+        );
 
       const coachUpdates = coaches.data
         .filter((coach) => getCoachTeamIds(coach).includes(team.id))
         .map((coach) =>
           firestoreApi.coaches.update(coach.id, {
-            teamIds: getCoachTeamIds(coach).filter((entry) => entry !== team.id),
+            teamIds: getCoachTeamIds(coach).filter(
+              (entry) => entry !== team.id,
+            ),
           }),
         );
 
       const eventUpdates = events.data
-        .filter((event) => getEventTeamSchedules(event).some((entry) => entry.teamId === team.id))
+        .filter((event) =>
+          getEventTeamSchedules(event).some(
+            (entry) => entry.teamId === team.id,
+          ),
+        )
         .map((event) => {
-          const remainingTeamSchedules = getEventTeamSchedules(event).filter((entry) => entry.teamId !== team.id);
+          const remainingTeamSchedules = getEventTeamSchedules(event).filter(
+            (entry) => entry.teamId !== team.id,
+          );
 
           return remainingTeamSchedules.length === 0
             ? firestoreApi.events.remove(event.id)
-            : firestoreApi.events.update(event.id, { teamSchedules: remainingTeamSchedules });
+            : firestoreApi.events.update(event.id, {
+                teamSchedules: remainingTeamSchedules,
+              });
         });
 
       await Promise.all([
@@ -426,13 +517,21 @@ export default function TeamManagerClient() {
 
       setStatus(`${team.name} season data cleared.`);
     } catch (clearError) {
-      setError(getFriendlyFirebaseError(clearError, "Unable to clear team season data."));
+      setError(
+        getFriendlyFirebaseError(
+          clearError,
+          "Unable to clear team season data.",
+        ),
+      );
     } finally {
       setClearingTeamId(null);
     }
   }
 
-  function getTeamPayment(teamId: string, playerId: string): InvoiceDocument | null {
+  function getTeamPayment(
+    teamId: string,
+    playerId: string,
+  ): InvoiceDocument | null {
     return (
       invoices.data.find(
         (invoice) => invoice.teamId === teamId && invoice.playerId === playerId,
@@ -474,11 +573,48 @@ export default function TeamManagerClient() {
         });
       }
 
-      setStatus(`${player.firstName} ${player.lastName} marked ${nextStatus} for ${team.name}.`);
+      setStatus(
+        `${player.firstName} ${player.lastName} marked ${nextStatus} for ${team.name}.`,
+      );
     } catch (paymentError) {
-      setError(getFriendlyFirebaseError(paymentError, "Unable to update team payment."));
+      setError(
+        getFriendlyFirebaseError(
+          paymentError,
+          "Unable to update team payment.",
+        ),
+      );
     } finally {
       setUpdatingPaymentKey(null);
+    }
+  }
+
+  async function handleBackfillTeamChatRooms() {
+    const confirmed = window.confirm(
+      "Create or update chat rooms for every team? This keeps existing message history and updates room roster access.",
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setBackfillingChatRooms(true);
+    setStatus(null);
+    setError(null);
+
+    try {
+      const result = await backfillTeamChatRooms();
+      setStatus(
+        `Team chat rooms synced for ${result.syncedCount} team${result.syncedCount === 1 ? "" : "s"}.`,
+      );
+    } catch (backfillError) {
+      setError(
+        getFriendlyFirebaseError(
+          backfillError,
+          "Unable to sync team chat rooms.",
+        ),
+      );
+    } finally {
+      setBackfillingChatRooms(false);
     }
   }
 
@@ -491,351 +627,484 @@ export default function TeamManagerClient() {
         actions={[{ href: "/admin/dashboard", label: "Admin Dashboard" }]}
       />
 
-      <div className="grid items-start gap-8 lg:grid-cols-[0.95fr_1.05fr]">
-        <SectionCard title={selectedTeamId ? "Edit Team" : "Add Team"} kicker="Team Details">
-          <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              <span>
-                Team name <span className="text-[#b42318]">*</span>
-              </span>
-              <input
-                value={draft.name}
-                onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Season notes
-              <textarea
-                value={draft.season}
-                onChange={(event) => setDraft((current) => ({ ...current, season: event.target.value }))}
-                className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Describe this team's season expectations or timing."
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Age group
-              <select
-                value={draft.ageGroup}
-                onChange={(event) => setDraft((current) => ({ ...current, ageGroup: event.target.value }))}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              >
-                <option value="">Select age group</option>
-                {["12U", "13U", "14U", "15U", "16U", "17U", "18U"].map((ageGroup) => (
-                  <option key={ageGroup} value={ageGroup}>
-                    {ageGroup}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Expected players per team
-              <input
-                type="number"
-                min="0"
-                value={draft.expectedPlayersPerTeam}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, expectedPlayersPerTeam: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Expected tournaments
-              <input
-                type="number"
-                min="0"
-                value={draft.expectedTournamentCount}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, expectedTournamentCount: event.target.value }))
-                }
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Description
-              <textarea
-                value={draft.description}
-                onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))}
-                className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Players
-              <input
-                value={playerFilter}
-                onChange={(event) => setPlayerFilter(event.target.value)}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Search players by name, position, or current team"
-              />
-              <div className="max-h-60 grid gap-3 overflow-y-auto rounded-2xl border border-[color:var(--line)] px-4 py-4">
-                {sortedPlayers.length === 0 && (
-                  <span className="text-sm font-medium text-[color:var(--muted)]">
-                    Add players before building a roster.
-                  </span>
-                )}
-                {sortedPlayers.length > 0 && filteredPlayers.length === 0 && (
-                  <span className="text-sm font-medium text-[color:var(--muted)]">
-                    No players match the current search.
-                  </span>
-                )}
-                {filteredPlayers.map((player) => {
-                  const assignedTeam = teams.data.find((team) => team.id === player.teamId);
-
-                  return (
-                    <label
-                      key={player.id}
-                      className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={draft.playerIds.includes(player.id)}
-                        onChange={(event) =>
-                          setDraft((current) => ({
-                            ...current,
-                            playerIds: toggleId(current.playerIds, player.id, event.target.checked),
-                          }))
-                        }
-                      />
-                      <span>
-                        {player.firstName} {player.lastName}
-                        {assignedTeam ? ` · ${assignedTeam.name}` : ""}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Coaches
-              <input
-                value={coachFilter}
-                onChange={(event) => setCoachFilter(event.target.value)}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Search coaches by name, title, or assigned team"
-              />
-              <div className="max-h-60 grid gap-3 overflow-y-auto rounded-2xl border border-[color:var(--line)] px-4 py-4">
-                {sortedCoaches.length === 0 && (
-                  <span className="text-sm font-medium text-[color:var(--muted)]">
-                    Add coaches before assigning staff.
-                  </span>
-                )}
-                {sortedCoaches.length > 0 && filteredCoaches.length === 0 && (
-                  <span className="text-sm font-medium text-[color:var(--muted)]">
-                    No coaches match the current search.
-                  </span>
-                )}
-                {filteredCoaches.map((coach) => {
-                  const assignedTeams = getCoachTeamIds(coach)
-                    .map((teamId) => teams.data.find((team) => team.id === teamId)?.name ?? "")
-                    .filter(Boolean)
-                    .join(", ");
-
-                  return (
-                    <label
-                      key={coach.id}
-                      className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={draft.coachIds.includes(coach.id)}
-                        onChange={(event) =>
-                          setDraft((current) => ({
-                            ...current,
-                            coachIds: toggleId(current.coachIds, coach.id, event.target.checked),
-                          }))
-                        }
-                      />
-                      <span>
-                        {coach.firstName} {coach.lastName}
-                        {assignedTeams ? ` · ${assignedTeams}` : ""}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </label>
-            <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Photo
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(event) => setSelectedPhotoName(event.target.files?.[0]?.name ?? "")}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-              />
-              <span className="text-xs font-medium text-[color:var(--muted)]">
-                {selectedPhotoName ? `Selected: ${selectedPhotoName}` : "Choose a team photo."}
-              </span>
-            </label>
-            <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
-              <input
-                type="checkbox"
-                checked={draft.active}
-                onChange={(event) => setDraft((current) => ({ ...current, active: event.target.checked }))}
-              />
-              Active team
-            </label>
-            <div className="md:col-span-2 flex flex-wrap items-center gap-3">
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {saving ? "Saving..." : selectedTeamId ? "Save Changes" : "Add Team"}
-              </button>
-              {selectedTeamId && (
-                <button
-                  type="button"
-                  onClick={resetForm}
-                  className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                >
-                  Cancel Edit
-                </button>
-              )}
-              {status && <span className="text-sm text-[color:var(--muted)]">{status}</span>}
-            </div>
-            {error && (
-              <div className="md:col-span-2 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
-                {error}
-              </div>
-            )}
-          </form>
-        </SectionCard>
-
-        <SectionCard title="Current Teams" kicker="Team Records">
-          <div className="mb-4">
-            <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
-              Search teams
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
-                placeholder="Search by team, season, age group, player, or coach"
-              />
-            </label>
+      <div className="mb-6 rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4 shadow-[0_12px_30px_rgba(17,58,98,0.04)]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+              Messaging
+            </p>
+            <p className="mt-1 text-sm text-[color:var(--muted)]">
+              Sync team chat rooms for existing teams without clearing message
+              history.
+            </p>
           </div>
-          <div className="max-h-[76rem] space-y-3 overflow-y-auto pr-2">
-            {teams.loading && (
-              <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                Loading teams...
-              </div>
-            )}
-            {!teams.loading && filteredTeams.length === 0 && (
-              <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
-                No teams match the current search.
-              </div>
-            )}
-            {filteredTeams.map((team) => {
-              const teamPlayers = players.data
-                .filter(isCurrentPlayer)
-                .filter((player) => player.teamId === team.id)
-                .sort(comparePlayersByName);
-              const teamCoaches = coaches.data.filter((coach) => getCoachTeamIds(coach).includes(team.id));
-              const teamEventCount = events.data.filter((event) =>
-                getEventTeamSchedules(event).some((entry) => entry.teamId === team.id),
-              ).length;
-
-              return (
-                <div key={team.id} className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4">
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <p className="text-lg font-bold text-[color:var(--ink)]">{team.name}</p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Players: {teamPlayers.length ? teamPlayers.map((player) => `${player.firstName} ${player.lastName}`).join(", ") : "No players assigned"}
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Coaches: {teamCoaches.length ? teamCoaches.map((coach) => `${coach.firstName} ${coach.lastName}`).join(", ") : "No coaches assigned"}
-                      </p>
-                      <p className="text-sm text-[color:var(--muted)]">
-                        Events: {teamEventCount} linked
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <Link
-                        href={`/players?team=${team.id}`}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        View
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={() => beginEdit(team)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        disabled={clearingTeamId === team.id}
-                        onClick={() => void handleClearTeamSeason(team)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {clearingTeamId === team.id ? "Clearing..." : "Clear season"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleDelete(team.id)}
-                        className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    {teamPlayers.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                          Team payments
-                        </p>
-                        {invoices.loading ? (
-                          <p className="text-sm text-[color:var(--muted)]">Loading payment statuses...</p>
-                        ) : invoices.error ? (
-                          <p className="text-sm text-[color:var(--muted)]">Payment statuses are unavailable right now.</p>
-                        ) : (
-                          <div className="grid gap-2">
-                            {teamPlayers.map((player) => {
-                              const payment = getTeamPayment(team.id, player.id);
-                              const paymentStatus = payment?.status === "paid" ? "paid" : "unpaid";
-                              const nextStatus = paymentStatus === "paid" ? "unpaid" : "paid";
-                              const paymentKey = `${team.id}:${player.id}`;
-
-                              return (
-                                <div
-                                  key={player.id}
-                                  className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[color:var(--paper)] px-3 py-2 text-sm"
-                                >
-                                  <span className="font-medium text-[color:var(--ink)]">
-                                    {player.firstName} {player.lastName}
-                                  </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
-                                      {paymentStatus}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      disabled={updatingPaymentKey === paymentKey}
-                                      onClick={() => void updateTeamPlayerPayment(team, player, nextStatus)}
-                                      className="rounded-full border border-[color:var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
-                                    >
-                                      {updatingPaymentKey === paymentKey
-                                        ? "Saving..."
-                                        : paymentStatus === "paid"
-                                          ? "Mark unpaid"
-                                          : "Mark paid"}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </SectionCard>
+          <button
+            type="button"
+            disabled={backfillingChatRooms}
+            onClick={() => void handleBackfillTeamChatRooms()}
+            className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {backfillingChatRooms ? "Syncing..." : "Sync Team Chat Rooms"}
+          </button>
+        </div>
       </div>
+
+      <MatchedAdminColumns
+        left={
+          <SectionCard
+            title={selectedTeamId ? "Edit Team" : "Add Team"}
+            kicker="Team Details"
+          >
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleSubmit}>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                <span>
+                  Team name <span className="text-[#b42318]">*</span>
+                </span>
+                <input
+                  value={draft.name}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      name: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Season notes
+                <textarea
+                  value={draft.season}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      season: event.target.value,
+                    }))
+                  }
+                  className="min-h-24 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Describe this team's season expectations or timing."
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Age group
+                <select
+                  value={draft.ageGroup}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      ageGroup: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                >
+                  <option value="">Select age group</option>
+                  {["12U", "13U", "14U", "15U", "16U", "17U", "18U"].map(
+                    (ageGroup) => (
+                      <option key={ageGroup} value={ageGroup}>
+                        {ageGroup}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Expected players per team
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.expectedPlayersPerTeam}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      expectedPlayersPerTeam: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Expected tournaments
+                <input
+                  type="number"
+                  min="0"
+                  value={draft.expectedTournamentCount}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      expectedTournamentCount: event.target.value,
+                    }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Description
+                <textarea
+                  value={draft.description}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      description: event.target.value,
+                    }))
+                  }
+                  className="min-h-28 rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Players
+                <input
+                  value={playerFilter}
+                  onChange={(event) => setPlayerFilter(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Search players by name, position, or current team"
+                />
+                <div className="max-h-60 grid gap-3 overflow-y-auto rounded-2xl border border-[color:var(--line)] px-4 py-4">
+                  {sortedPlayers.length === 0 && (
+                    <span className="text-sm font-medium text-[color:var(--muted)]">
+                      Add players before building a roster.
+                    </span>
+                  )}
+                  {sortedPlayers.length > 0 && filteredPlayers.length === 0 && (
+                    <span className="text-sm font-medium text-[color:var(--muted)]">
+                      No players match the current search.
+                    </span>
+                  )}
+                  {filteredPlayers.map((player) => {
+                    const assignedTeam = teams.data.find(
+                      (team) => team.id === player.teamId,
+                    );
+
+                    return (
+                      <label
+                        key={player.id}
+                        className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={draft.playerIds.includes(player.id)}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              playerIds: toggleId(
+                                current.playerIds,
+                                player.id,
+                                event.target.checked,
+                              ),
+                            }))
+                          }
+                        />
+                        <span>
+                          {player.firstName} {player.lastName}
+                          {assignedTeam ? ` · ${assignedTeam.name}` : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Coaches
+                <input
+                  value={coachFilter}
+                  onChange={(event) => setCoachFilter(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Search coaches by name, title, or assigned team"
+                />
+                <div className="max-h-60 grid gap-3 overflow-y-auto rounded-2xl border border-[color:var(--line)] px-4 py-4">
+                  {sortedCoaches.length === 0 && (
+                    <span className="text-sm font-medium text-[color:var(--muted)]">
+                      Add coaches before assigning staff.
+                    </span>
+                  )}
+                  {sortedCoaches.length > 0 && filteredCoaches.length === 0 && (
+                    <span className="text-sm font-medium text-[color:var(--muted)]">
+                      No coaches match the current search.
+                    </span>
+                  )}
+                  {filteredCoaches.map((coach) => {
+                    const assignedTeams = getCoachTeamIds(coach)
+                      .map(
+                        (teamId) =>
+                          teams.data.find((team) => team.id === teamId)?.name ??
+                          "",
+                      )
+                      .filter(Boolean)
+                      .join(", ");
+
+                    return (
+                      <label
+                        key={coach.id}
+                        className="flex items-center gap-3 text-sm font-medium text-[color:var(--ink)]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={draft.coachIds.includes(coach.id)}
+                          onChange={(event) =>
+                            setDraft((current) => ({
+                              ...current,
+                              coachIds: toggleId(
+                                current.coachIds,
+                                coach.id,
+                                event.target.checked,
+                              ),
+                            }))
+                          }
+                        />
+                        <span>
+                          {coach.firstName} {coach.lastName}
+                          {assignedTeams ? ` · ${assignedTeams}` : ""}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) =>
+                    setSelectedPhotoName(event.target.files?.[0]?.name ?? "")
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                />
+                <span className="text-xs font-medium text-[color:var(--muted)]">
+                  {selectedPhotoName
+                    ? `Selected: ${selectedPhotoName}`
+                    : "Choose a team photo."}
+                </span>
+              </label>
+              <label className="md:col-span-2 flex items-center gap-3 rounded-2xl bg-[color:var(--paper)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                <input
+                  type="checkbox"
+                  checked={draft.active}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      active: event.target.checked,
+                    }))
+                  }
+                />
+                Active team
+              </label>
+              <div className="md:col-span-2 flex flex-wrap items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-[color:var(--ink)] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#143b66] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving
+                    ? "Saving..."
+                    : selectedTeamId
+                      ? "Save Changes"
+                      : "Add Team"}
+                </button>
+                {selectedTeamId && (
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="rounded-full border border-[color:var(--line)] px-5 py-3 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                  >
+                    Cancel Edit
+                  </button>
+                )}
+                {status && (
+                  <span className="text-sm text-[color:var(--muted)]">
+                    {status}
+                  </span>
+                )}
+              </div>
+              {error && (
+                <div className="md:col-span-2 rounded-2xl border border-[#e7b8b8] bg-[#fff2f2] px-4 py-4 text-sm text-[#8a2d2d]">
+                  {error}
+                </div>
+              )}
+            </form>
+          </SectionCard>
+        }
+        right={
+          <SectionCard title="Current Teams" kicker="Team Records">
+            <div className="mb-4">
+              <label className="flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Search teams
+                <input
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Search by team, season, age group, player, or coach"
+                />
+              </label>
+            </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+              {teams.loading && (
+                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  Loading teams...
+                </div>
+              )}
+              {!teams.loading && filteredTeams.length === 0 && (
+                <div className="rounded-2xl border border-[color:var(--line)] px-4 py-4 text-sm text-[color:var(--muted)]">
+                  No teams match the current search.
+                </div>
+              )}
+              {filteredTeams.map((team) => {
+                const teamPlayers = players.data
+                  .filter(isCurrentPlayer)
+                  .filter((player) => player.teamId === team.id)
+                  .sort(comparePlayersByName);
+                const teamCoaches = coaches.data.filter((coach) =>
+                  getCoachTeamIds(coach).includes(team.id),
+                );
+                const teamEventCount = events.data.filter((event) =>
+                  getEventTeamSchedules(event).some(
+                    (entry) => entry.teamId === team.id,
+                  ),
+                ).length;
+
+                return (
+                  <div
+                    key={team.id}
+                    className="rounded-[1.5rem] border border-[color:var(--line)] bg-white px-5 py-4"
+                  >
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <p className="text-lg font-bold text-[color:var(--ink)]">
+                          {team.name}
+                        </p>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          Players:{" "}
+                          {teamPlayers.length
+                            ? teamPlayers
+                                .map(
+                                  (player) =>
+                                    `${player.firstName} ${player.lastName}`,
+                                )
+                                .join(", ")
+                            : "No players assigned"}
+                        </p>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          Coaches:{" "}
+                          {teamCoaches.length
+                            ? teamCoaches
+                                .map(
+                                  (coach) =>
+                                    `${coach.firstName} ${coach.lastName}`,
+                                )
+                                .join(", ")
+                            : "No coaches assigned"}
+                        </p>
+                        <p className="text-sm text-[color:var(--muted)]">
+                          Events: {teamEventCount} linked
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-3">
+                        <Link
+                          href={`/players?team=${team.id}`}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          View
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => beginEdit(team)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          disabled={clearingTeamId === team.id}
+                          onClick={() => void handleClearTeamSeason(team)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {clearingTeamId === team.id
+                            ? "Clearing..."
+                            : "Clear season"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(team.id)}
+                          className="rounded-full border border-[color:var(--line)] px-4 py-2 text-sm font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)]"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      {teamPlayers.length > 0 && (
+                        <div className="mt-3 space-y-2">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
+                            Team payments
+                          </p>
+                          {invoices.loading ? (
+                            <p className="text-sm text-[color:var(--muted)]">
+                              Loading payment statuses...
+                            </p>
+                          ) : invoices.error ? (
+                            <p className="text-sm text-[color:var(--muted)]">
+                              Payment statuses are unavailable right now.
+                            </p>
+                          ) : (
+                            <div className="grid gap-2">
+                              {teamPlayers.map((player) => {
+                                const payment = getTeamPayment(
+                                  team.id,
+                                  player.id,
+                                );
+                                const paymentStatus =
+                                  payment?.status === "paid"
+                                    ? "paid"
+                                    : "unpaid";
+                                const nextStatus =
+                                  paymentStatus === "paid" ? "unpaid" : "paid";
+                                const paymentKey = `${team.id}:${player.id}`;
+
+                                return (
+                                  <div
+                                    key={player.id}
+                                    className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-[color:var(--paper)] px-3 py-2 text-sm"
+                                  >
+                                    <span className="font-medium text-[color:var(--ink)]">
+                                      {player.firstName} {player.lastName}
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.16em] text-[color:var(--muted)]">
+                                        {paymentStatus}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        disabled={
+                                          updatingPaymentKey === paymentKey
+                                        }
+                                        onClick={() =>
+                                          void updateTeamPlayerPayment(
+                                            team,
+                                            player,
+                                            nextStatus,
+                                          )
+                                        }
+                                        className="rounded-full border border-[color:var(--line)] bg-white px-3 py-1 text-xs font-semibold text-[color:var(--ink)] transition hover:bg-[color:var(--paper)] disabled:cursor-not-allowed disabled:opacity-60"
+                                      >
+                                        {updatingPaymentKey === paymentKey
+                                          ? "Saving..."
+                                          : paymentStatus === "paid"
+                                            ? "Mark unpaid"
+                                            : "Mark paid"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        }
+      />
     </>
   );
 }

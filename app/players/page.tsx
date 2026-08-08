@@ -93,7 +93,7 @@ function PlayersPageContent() {
         }
         actions={[
           { href: "/teams", label: "Back To Teams" },
-          ...(selectedTeam ? [{ href: "/players", label: "View Full Directory", variant: "secondary" as const }] : [{ href: "/login", label: "Open Player Portal", variant: "secondary" as const }]),
+          ...(selectedTeam ? [{ href: "/players", label: "View Full Directory", variant: "secondary" as const }] : [{ href: "/login", label: "Open Portal", variant: "secondary" as const }]),
         ]}
       />
 

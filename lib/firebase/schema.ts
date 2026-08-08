@@ -21,6 +21,7 @@ export type Provider = "stripe";
 export type ProviderPaymentStatus = "pending" | "succeeded" | "failed" | "refunded";
 export type AnnouncementAudience = "public" | "players" | "parents" | "team";
 export type ConflictStatus = "submitted" | "reviewed" | "resolved";
+export type ChatRoomType = "direct" | "team";
 
 export type FirestoreDate = Timestamp | null;
 export type ServerDateInput = Timestamp | Date | null;
@@ -138,11 +139,13 @@ export interface EventTeamSchedule {
 
 export interface EventDocument extends BaseDocument {
   type: ClubEventType;
+  tournamentDayCount?: number;
   title: string;
   status: EventStatus;
   teamSchedules: EventTeamSchedule[];
   expenseTriggered: string[];
   ageGroup: string;
+  ageGroups: string[];
   price: number;
   paymentUrl: string;
   externalUrl: string;
@@ -156,14 +159,18 @@ export interface EventDocument extends BaseDocument {
   practicePublished: boolean;
   location: string;
   notes: string;
+  fullDetails: string;
   active: boolean;
 }
 
 export interface PayTypeDocument extends BaseDocument {
   eventType: ClubEventType;
+  tournamentDayCount?: number;
   description: string;
   value: number;
   defaulted: boolean;
+  mealStipend: boolean;
+  mealStipendAmount?: number;
 }
 
 export interface ScheduleItem {
@@ -270,6 +277,8 @@ export interface ExpenseReportDocument extends BaseDocument {
   title: string;
   amount: number;
   expenseDate: string;
+  teamSubstitution: string;
+  mealStipend: boolean;
   notes: string;
   receiptUrl: string;
   receiptFileName: string;
@@ -278,6 +287,10 @@ export interface ExpenseReportDocument extends BaseDocument {
   reviewedBy: string;
   paidAt: FirestoreDate;
   paidBy: string;
+  suggestedExpenseId?: string;
+  sourceEventId?: string;
+  sourcePayTypeId?: string;
+  sourceExpenseKind?: "base" | "meal";
 }
 
 export interface ConflictDocument extends BaseDocument {
@@ -342,6 +355,39 @@ export interface AnnouncementDocument extends BaseDocument {
   active: boolean;
 }
 
+export interface ChatRoomDocument extends BaseDocument {
+  type: ChatRoomType;
+  title: string;
+  teamId: string;
+  participantUserIds: string[];
+  participantPlayerIds: string[];
+  lastMessageText: string;
+  lastMessageSenderId: string;
+  lastMessageAt: FirestoreDate;
+  active: boolean;
+}
+
+export interface ChatMessageDocument extends BaseDocument {
+  roomId: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  notificationSent: boolean;
+  notificationSuccessCount?: number;
+  notificationFailureCount?: number;
+  notificationError?: string;
+  notificationErrors?: string[];
+  notificationDiagnostic?: string;
+  notificationUpdatedAt?: FirestoreDate;
+}
+
+export interface PushTokenDocument extends BaseDocument {
+  userId: string;
+  token: string;
+  platform: "ios" | "android" | "web" | "unknown";
+  active: boolean;
+}
+
 export interface FirestoreCollections {
   users: UserDocument;
   players: PlayerDocument;
@@ -360,6 +406,9 @@ export interface FirestoreCollections {
   alumni: AlumniDocument;
   pages: PageDocument;
   announcements: AnnouncementDocument;
+  chatRooms: ChatRoomDocument;
+  chatMessages: ChatMessageDocument;
+  pushTokens: PushTokenDocument;
 }
 
 export type CollectionName = keyof FirestoreCollections;

@@ -6,29 +6,32 @@ import PageHero from "@/app/components/PageHero";
 import SectionCard from "@/app/components/SectionCard";
 import { useAuthSession } from "@/lib/firebase/auth";
 import { firestoreApi, useFirestoreCollection, getFriendlyFirebaseError } from "@/lib/firebase";
-import type { CoachDocument, EventDocument, ExpenseReportDocument, PayTypeDocument } from "@/lib/firebase/schema";
+import type { ExpenseReportDocument } from "@/lib/firebase/schema";
 import { uploadExpenseReceipt } from "@/lib/firebase/storage";
+import {
+  buildAvailableSuggestedExpenses,
+  getCoachPayTypeIds,
+  getCoachTeamIds,
+  getExpenseEventEndDate,
+  type SuggestedExpense,
+} from "@/lib/expense-reporting";
 import { toExternalHref } from "@/lib/url";
 
 type ExpenseDraft = {
   title: string;
   amount: string;
   expenseDate: string;
+  teamSubstitution: string;
   notes: string;
 };
 
 type ExpenseStatusFilter = ExpenseReportDocument["status"] | "all";
 
-type SuggestedExpense = {
-  id: string;
-  event: EventDocument;
-  payType: PayTypeDocument;
-};
-
 const emptyDraft: ExpenseDraft = {
   title: "",
   amount: "",
   expenseDate: "",
+  teamSubstitution: "",
   notes: "",
 };
 
@@ -80,42 +83,6 @@ function statusClassName(status: ExpenseReportDocument["status"]) {
   return "bg-amber-50 text-amber-800";
 }
 
-function getCoachTeamIds(coach: CoachDocument): string[] {
-  if (Array.isArray((coach as CoachDocument & { teamIds?: string[] }).teamIds)) {
-    return (coach as CoachDocument & { teamIds?: string[] }).teamIds.filter(Boolean);
-  }
-
-  const legacyTeamId = (coach as CoachDocument & { teamId?: string }).teamId;
-
-  return legacyTeamId ? [legacyTeamId] : [];
-}
-
-function getCoachPayTypeIds(coach: CoachDocument): string[] {
-  return Array.isArray(coach.payTypeIds) ? coach.payTypeIds.filter(Boolean) : [];
-}
-
-function getEventTriggeredUserIds(event: EventDocument): string[] {
-  const value = (event as EventDocument & { expenseTriggered?: string[] }).expenseTriggered;
-
-  return Array.isArray(value) ? value.filter(Boolean) : [];
-}
-
-function getEventEndDate(event: EventDocument) {
-  return event.endDate || event.startDate;
-}
-
-function isPastEvent(event: EventDocument) {
-  const endDate = getEventEndDate(event);
-
-  if (!endDate) {
-    return false;
-  }
-
-  const end = new Date(`${endDate}T23:59:59`);
-
-  return !Number.isNaN(end.getTime()) && end.getTime() < Date.now();
-}
-
 export default function ExpenseReportManagerClient() {
   const access = useAuthSession();
   const receiptInputRef = useRef<HTMLInputElement | null>(null);
@@ -138,6 +105,9 @@ export default function ExpenseReportManagerClient() {
     enabled: isCoach || isAdmin,
   });
   const coaches = useFirestoreCollection("coaches", {
+    enabled: isCoach || isAdmin,
+  });
+  const teams = useFirestoreCollection("teams", {
     enabled: isCoach || isAdmin,
   });
   const payTypes = useFirestoreCollection("payTypes", {
@@ -238,61 +208,86 @@ export default function ExpenseReportManagerClient() {
       coaches.data.find((coach) => coach.email.trim().toLowerCase() === signedInEmail) ?? null
     );
   }, [access.authUser?.profile?.coachId, coaches.data, signedInEmail]);
+  const currentCoachWithTeamLinks = useMemo(() => {
+    if (!currentCoach) {
+      return null;
+    }
+
+    const linkedTeamIds = Array.from(
+      new Set([
+        ...getCoachTeamIds(currentCoach),
+        ...teams.data
+          .filter((team) => (team.coachIds ?? []).includes(currentCoach.id))
+          .map((team) => team.id),
+      ]),
+    );
+
+    return {
+      ...currentCoach,
+      teamIds: linkedTeamIds,
+    };
+  }, [currentCoach, teams.data]);
+  const coachExpenseSetupWarnings = useMemo(() => {
+    if (!isCoach || coaches.loading || teams.loading || payTypes.loading) {
+      return [];
+    }
+
+    if (!currentCoachWithTeamLinks) {
+      return ["Your account is not linked to a coach profile yet. Ask an admin to link your account in Account Management."];
+    }
+
+    const warnings: string[] = [];
+    const coachTeamIds = getCoachTeamIds(currentCoachWithTeamLinks);
+    const coachPayTypeIds = getCoachPayTypeIds(currentCoachWithTeamLinks);
+    const assignedOrDefaultPayTypes = payTypes.data.filter((payType) =>
+      coachPayTypeIds.length > 0 ? coachPayTypeIds.includes(payType.id) : payType.defaulted,
+    );
+    const hasPracticePayType = assignedOrDefaultPayTypes.some((payType) => payType.eventType === "practice");
+
+    if (coachTeamIds.length === 0) {
+      warnings.push("Your coach profile is not assigned to any teams yet.");
+    }
+
+    if (assignedOrDefaultPayTypes.length === 0) {
+      warnings.push("Your coach profile does not have any pay types assigned, and no default pay types are available.");
+    } else if (!hasPracticePayType) {
+      warnings.push("Your assigned pay types do not include a practice pay type.");
+    }
+
+    return warnings;
+  }, [coaches.loading, currentCoachWithTeamLinks, isCoach, payTypes.data, payTypes.loading, teams.loading]);
   const availableSuggestedExpenses = useMemo<SuggestedExpense[]>(() => {
-    if (!uid || !currentCoach) {
-      return [];
-    }
+    const existingSuggestedExpenseIds = sortedExpenseReports
+      .map((report) => report.suggestedExpenseId)
+      .filter((suggestedExpenseId): suggestedExpenseId is string => Boolean(suggestedExpenseId));
 
-    const coachTeamIds = new Set(getCoachTeamIds(currentCoach));
-    const coachPayTypeIds = new Set(getCoachPayTypeIds(currentCoach));
-    const assignedPayTypes = payTypes.data.filter((payType) => coachPayTypeIds.has(payType.id));
-    const completedSuggestedExpenseIds = new Set([
-      ...submittedSuggestedExpenseIds,
-      ...skippedSuggestedExpenseIds,
-    ]);
-
-    if (coachTeamIds.size === 0 || assignedPayTypes.length === 0) {
-      return [];
-    }
-
-    return events.data
-      .filter((event) => {
-        const eventTeamIds = event.teamSchedules.map((entry) => entry.teamId).filter(Boolean);
-        const alreadyTriggered = getEventTriggeredUserIds(event).includes(uid);
-
-        return (
-          event.active &&
-          isPastEvent(event) &&
-          !alreadyTriggered &&
-          eventTeamIds.some((teamId) => coachTeamIds.has(teamId))
-        );
-      })
-      .flatMap((event) =>
-        assignedPayTypes
-          .filter((payType) => payType.eventType === event.type)
-          .map((payType) => ({
-            id: `${event.id}:${payType.id}`,
-            event,
-            payType,
-          })),
-      )
-      .filter((suggestion) => !completedSuggestedExpenseIds.has(suggestion.id))
-      .sort((left, right) =>
-        `${left.event.startDate} ${left.event.title} ${left.payType.description}`.localeCompare(
-          `${right.event.startDate} ${right.event.title} ${right.payType.description}`,
-        ),
-      );
+    return buildAvailableSuggestedExpenses({
+      uid,
+      currentCoach: currentCoachWithTeamLinks,
+      events: events.data,
+      payTypes: payTypes.data,
+      skippedSuggestedExpenseIds,
+      submittedSuggestedExpenseIds: [...submittedSuggestedExpenseIds, ...existingSuggestedExpenseIds],
+    });
   }, [
-    currentCoach,
+    currentCoachWithTeamLinks,
     events.data,
     payTypes.data,
     skippedSuggestedExpenseIds,
+    sortedExpenseReports,
     submittedSuggestedExpenseIds,
     uid,
   ]);
   const completedSuggestedExpenseIds = useMemo(
-    () => new Set([...submittedSuggestedExpenseIds, ...skippedSuggestedExpenseIds]),
-    [skippedSuggestedExpenseIds, submittedSuggestedExpenseIds],
+    () =>
+      new Set([
+        ...submittedSuggestedExpenseIds,
+        ...skippedSuggestedExpenseIds,
+        ...sortedExpenseReports
+          .map((report) => report.suggestedExpenseId)
+          .filter((suggestedExpenseId): suggestedExpenseId is string => Boolean(suggestedExpenseId)),
+      ]),
+    [skippedSuggestedExpenseIds, sortedExpenseReports, submittedSuggestedExpenseIds],
   );
   const suggestedExpenses = useMemo(
     () => suggestedExpenseQueue.filter((suggestion) => !completedSuggestedExpenseIds.has(suggestion.id)),
@@ -341,6 +336,8 @@ export default function ExpenseReportManagerClient() {
         title: draft.title.trim(),
         amount,
         expenseDate: draft.expenseDate,
+        teamSubstitution: draft.teamSubstitution.trim(),
+        mealStipend: false,
         notes: draft.notes.trim(),
         receiptUrl: "",
         receiptFileName: "",
@@ -405,13 +402,18 @@ export default function ExpenseReportManagerClient() {
         coachUserId: access.authUser.firebaseUser.uid,
         coachName: `${access.authUser.profile.firstName} ${access.authUser.profile.lastName}`.trim(),
         coachEmail: access.authUser.profile.email || access.authUser.firebaseUser.email || "",
-        title: `${suggestion.event.title} - ${suggestion.payType.description}`,
-        amount: suggestion.payType.value,
-        expenseDate: getEventEndDate(suggestion.event) || suggestion.event.startDate,
+        title: `${suggestion.event.title} - ${suggestion.description}`,
+        amount: suggestion.amount,
+        expenseDate: getExpenseEventEndDate(suggestion.event) || suggestion.event.startDate,
+        teamSubstitution: "",
+        mealStipend: suggestion.mealStipend,
         notes: [
           `Auto-created from ${suggestion.event.title}.`,
-          `Pay type: ${suggestion.payType.description}.`,
-        ].join("\n"),
+          `Pay type: ${suggestion.description}.`,
+          suggestion.mealStipend ? "Meal stipend." : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
         receiptUrl: "",
         receiptFileName: "",
         status: "pending",
@@ -419,9 +421,12 @@ export default function ExpenseReportManagerClient() {
         reviewedBy: "",
         paidAt: null,
         paidBy: "",
+        suggestedExpenseId: suggestion.id,
+        sourceEventId: suggestion.event.id,
+        sourcePayTypeId: suggestion.payType.id,
+        sourceExpenseKind: suggestion.kind,
       });
 
-      await firestoreApi.events.markExpenseTriggered(suggestion.event.id, access.authUser.firebaseUser.uid);
       setSubmittedSuggestedExpenseIds((current) => [...new Set([...current, suggestion.id])]);
       setStatus("Suggested expense report submitted.");
     } catch (submitError) {
@@ -562,7 +567,7 @@ export default function ExpenseReportManagerClient() {
                     Expense reports ready to submit
                   </h2>
                   <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
-                    These are past team events that match your assigned coach pay types.
+                    These are team events that ended at least 7 days ago and match your assigned coach pay types.
                   </p>
                 </div>
                 <button
@@ -586,10 +591,11 @@ export default function ExpenseReportManagerClient() {
                           {suggestion.event.title}
                         </p>
                         <div className="mt-2 space-y-1 text-sm text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-                          <p>{formatDate(getEventEndDate(suggestion.event))}</p>
-                          <p>{suggestion.payType.description}</p>
+                          <p>{formatDate(getExpenseEventEndDate(suggestion.event))}</p>
+                          <p>{suggestion.description}</p>
+                          {suggestion.mealStipend && <p>Meal stipend</p>}
                           <p className="font-semibold text-[color:var(--ink)] group-hover:text-white">
-                            {formatMoney(suggestion.payType.value)}
+                            {formatMoney(suggestion.amount)}
                           </p>
                         </div>
                       </div>
@@ -609,6 +615,19 @@ export default function ExpenseReportManagerClient() {
               </div>
             </div>
           </div>
+        )}
+
+        {isCoach && coachExpenseSetupWarnings.length > 0 && (
+          <SectionCard title="Suggested Expense Setup" kicker="Coach Setup">
+            <div className="rounded-2xl border border-[#f2d097] bg-[#fff8eb] px-4 py-4 text-sm leading-7 text-[#7a4b00]">
+              <p className="font-semibold">Suggested expense reports need setup before they can appear.</p>
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                {coachExpenseSetupWarnings.map((warning) => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            </div>
+          </SectionCard>
         )}
 
         {(isCoach || isAdmin) && (
@@ -646,6 +665,17 @@ export default function ExpenseReportManagerClient() {
                   onChange={(event) => setDraft((current) => ({ ...current, expenseDate: event.target.value }))}
                   className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
                   type="date"
+                />
+              </label>
+              <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
+                Team substitution
+                <input
+                  value={draft.teamSubstitution}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, teamSubstitution: event.target.value }))
+                  }
+                  className="rounded-2xl border border-[color:var(--line)] px-4 py-3"
+                  placeholder="Optional: team you helped cover"
                 />
               </label>
               <label className="md:col-span-2 flex flex-col gap-2 text-sm font-semibold text-[color:var(--ink)]">
@@ -818,6 +848,8 @@ export default function ExpenseReportManagerClient() {
                       <div className="mt-2 space-y-1 text-sm text-[color:var(--muted)]">
                         <p>{formatMoney(report.amount)} · {formatDate(report.expenseDate)}</p>
                         <p>{report.coachName || report.coachEmail || "Coach"}</p>
+                        {report.teamSubstitution && <p>Team substitution: {report.teamSubstitution}</p>}
+                        {report.mealStipend && <p>Meal stipend included</p>}
                         {report.receiptUrl && (
                           <p>
                             <a

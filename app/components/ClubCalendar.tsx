@@ -11,6 +11,7 @@ import type {
 } from "@/lib/firebase/schema";
 import { getEventTeamSchedules } from "@/lib/event-teams";
 import { useAuthSession } from "@/lib/firebase/auth";
+import { formatTournamentEventLabel, isTournamentEventType } from "@/lib/tournament-events";
 
 type ClubCalendarProps = {
   events: EventDocument[];
@@ -79,13 +80,17 @@ const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Frida
 
 const eventTypeLabels: Record<EventDocument["type"], string> = {
   tournament: "Tournament",
-  twoDayTournament: "2 Day Tournament",
+  twoDayTournament: "Tournament",
   practice: "Practice",
   camp: "Camp",
   tryout: "Tryout",
   areaCamp: "Area Camp",
   refScoringClinic: "Ref And Scoring Clinic",
 };
+
+function getCalendarEventTypeLabel(event: EventDocument) {
+  return isTournamentEventType(event.type) ? formatTournamentEventLabel(event) : eventTypeLabels[event.type];
+}
 
 const eventTypeFilterOptions: { label: string; types: EventDocument["type"][] }[] = [
   { label: "Tournament", types: ["tournament", "twoDayTournament"] },
@@ -1533,7 +1538,7 @@ export default function ClubCalendar({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                  {eventTypeLabels[selectedEvent.type]}
+                  {getCalendarEventTypeLabel(selectedEvent)}
                 </p>
                 <h2 id="calendar-event-dialog-title" className="mt-2 text-2xl font-bold text-[color:var(--ink)]">
                   {selectedEvent.title}
@@ -1674,7 +1679,7 @@ export default function ClubCalendar({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-[color:var(--muted)]">
-                  Duplicate {eventTypeLabels[duplicateSourceEvent.type]}
+                  Duplicate {getCalendarEventTypeLabel(duplicateSourceEvent)}
                 </p>
                 <h2 id="calendar-duplicate-dialog-title" className="mt-2 text-2xl font-bold text-[color:var(--ink)]">
                   {duplicateSourceEvent.title}

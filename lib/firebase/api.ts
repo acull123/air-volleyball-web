@@ -1,7 +1,7 @@
 import {
-  addDoc,
   arrayUnion,
   deleteDoc,
+  doc,
   getDoc,
   getDocs,
   orderBy,
@@ -22,6 +22,10 @@ import type {
   FirestoreCollections,
   UpdateDocumentInput,
 } from "./schema";
+
+export function getRegistrationDocumentId(eventId: string, playerId: string) {
+  return `${eventId}_${playerId}`;
+}
 
 function applyTimestamps<T extends { createdAt?: unknown; updatedAt?: unknown }>(
   data: T,
@@ -78,8 +82,8 @@ async function createDocument<K extends CollectionName>(
     return id;
   }
 
-  const ref = await addDoc(collectionRef(name), applyTimestamps(rest as FirestoreCollections[K], "create"));
-  await updateDoc(ref, { id: ref.id });
+  const ref = doc(collectionRef(name));
+  await setDoc(ref, applyTimestamps({ id: ref.id, ...rest } as FirestoreCollections[K], "create"));
   return ref.id;
 }
 
@@ -228,5 +232,14 @@ export const firestoreApi = {
         where("audience", "==", "public"),
         orderBy("publishDate", "desc"),
       ]),
+  },
+  chatRooms: {
+    ...buildCollectionStore("chatRooms"),
+  },
+  chatMessages: {
+    ...buildCollectionStore("chatMessages"),
+  },
+  pushTokens: {
+    ...buildCollectionStore("pushTokens"),
   },
 };

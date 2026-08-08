@@ -188,7 +188,18 @@ export default function AdminDashboardContent({ role }: AdminDashboardContentPro
           >
             <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">Where we are</h2>
             <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
-              Placeholder for future club dashboard views.
+              Review tournament days and see which teams are playing in each tournament.
+            </p>
+          </Link>
+          <Link
+            href="/admin/dashboards/multiple-tryouts"
+            className={clickableCardClass}
+          >
+            <h2 className="text-2xl font-bold text-[color:var(--ink)] group-hover:text-white">
+              Multiple future tryouts
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-[color:var(--muted)] group-hover:text-[#d7e5f2]">
+              Players registered for more than one future tryout.
             </p>
           </Link>
         </div>
